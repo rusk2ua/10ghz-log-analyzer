@@ -6,7 +6,7 @@ from io import StringIO
 from datetime import datetime
 import math
 
-VERSION = "1.2"
+VERSION = "1.4.0"
 
 def get_sheet_data(sheet_url):
     """Convert Google Sheets URL to CSV export URL and fetch data"""
@@ -136,50 +136,6 @@ def generate_summary(df, header_info, total_score):
     lines.append(f"Total\t\t{len(df)}\t\t{total_score}\t\t{total_unique_sum}")
     
     return '\n'.join(lines)
-    """Get required Cabrillo header information from user"""
-    print("\n=== ARRL 10 GHz and Up Contest - Cabrillo Header Information ===\n")
-    
-    callsign = input("Your callsign (e.g., W1ABC): ").strip().upper()
-    contest = "ARRL-10-GHZ"
-    
-    print("\nOperator Category:")
-    print("  SINGLE-OP = Single operator")
-    print("  MULTI-OP  = Multiple operators")
-    category_operator = input("Enter SINGLE-OP or MULTI-OP: ").strip().upper()
-    
-    print("\nBand Category:")
-    print("  10G  = 10 GHz only")
-    print("  24G  = 24 GHz only") 
-    print("  47G  = 47 GHz only")
-    print("  75G  = 75+ GHz only")
-    print("  119G = 119 GHz only")
-    print("  142G = 142 GHz only")
-    print("  241G = 241 GHz only")
-    print("  ALL  = All bands")
-    category_band = input("Enter band category: ").strip().upper()
-    
-    print("\nPower Category:")
-    print("  LOW  = Low power")
-    print("  HIGH = High power")
-    category_power = input("Enter LOW or HIGH: ").strip().upper()
-    
-    print("\nMode Category:")
-    print("  CW    = CW only")
-    print("  FM    = FM only")
-    print("  MIXED = Multiple modes")
-    category_mode = input("Enter CW, FM, or MIXED: ").strip().upper()
-    
-    claimed_score = input("\nClaimed score (press Enter to auto-calculate): ").strip()
-    
-    return {
-        'callsign': callsign,
-        'contest': contest,
-        'category_operator': category_operator,
-        'category_band': category_band,
-        'category_power': category_power,
-        'category_mode': category_mode,
-        'claimed_score': claimed_score
-    }
 
 def get_band_multiplier(band):
     """Get points per km multiplier based on band"""
@@ -394,7 +350,7 @@ def main():
     contact_data.columns = ['date', 'band', 'sourcegrid', 'time', 'call', 'grid']
     
     # Forward fill empty cells with values from above
-    contact_data = contact_data.fillna(method='ffill')
+    contact_data = contact_data.ffill()
     
     # Clean data
     contact_data = contact_data.dropna(subset=['call'])

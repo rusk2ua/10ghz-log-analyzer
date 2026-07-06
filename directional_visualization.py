@@ -18,15 +18,20 @@ def get_sheet_data(sheet_url):
     return pd.read_csv(StringIO(response.text))
 
 def parse_cabrillo_file(filename):
-    """Parse Cabrillo log file and return DataFrame"""
+    """Parse Cabrillo log file and return DataFrame and callsign"""
     qsos = []
+    callsign = None
     
     with open(filename, 'r') as f:
         for line in f:
             line = line.strip()
-            if line.startswith('QSO:'):
+            if line.startswith('CALLSIGN:'):
+                callsign = line.split(':',1)[1].strip().upper()
+            elif line.startswith('QSO:'):
                 parts = line.split()
                 if len(parts) >= 8:
+                    if callsign is None:
+                        callsign = parts[5].upper()
                     qsos.append({
                         'date': parts[3],
                         'band': parts[1],
@@ -35,10 +40,10 @@ def parse_cabrillo_file(filename):
                         'call': parts[7],
                         'grid': parts[8] if len(parts) > 8 else ''
                     })
-    return pd.DataFrame(qsos)
+    return pd.DataFrame(qsos), callsign or "UNKNOWN"
 
 def get_data_source():
-    """Determine data source and load data"""
+    """Determine data source and load data. Returns (DataFrame, callsign)."""
     if len(sys.argv) > 1:
         filename = sys.argv[1]
         if os.path.exists(filename) and filename.lower().endswith('.log'):
@@ -52,7 +57,7 @@ def get_data_source():
     df = get_sheet_data(sheet_url)
     contact_data = df.iloc[2:].copy()
     contact_data.columns = ['date', 'band', 'sourcegrid', 'time', 'call', 'grid']
-    return contact_data
+    return contact_data, "UNKNOWN"
 
 def grid_to_latlon(grid):
     """Convert 6-digit Maidenhead grid to lat/lon"""
@@ -127,22 +132,11 @@ def parse_datetime(date_str, time_str):
     except:
         return None
 
-def categorize_contest_day(dt):
-    """Categorize QSO into contest day periods"""
+def categorize_contest_day(dt, contest_dates):
+    """Categorize QSO into contest day periods using dynamically determined dates"""
     if dt is None:
         return "Unknown"
     
-    # Expanded contest day mapping to include Monday activity
-    contest_dates = {
-        '2025-08-16': 1,
-        '2025-08-17': 2, 
-        '2025-08-18': 2,  # Extended to include Monday
-        '2025-09-20': 3,
-        '2025-09-21': 4,
-        '2025-09-22': 4   # Extended to include Monday
-    }
-    
-    # Expanded contest period: all hours on contest dates
     date_key = dt.strftime('%Y-%m-%d')
     day_num = contest_dates.get(date_key)
     
@@ -150,6 +144,54 @@ def categorize_contest_day(dt):
         return f"{date_key} Day {day_num}"
     else:
         return "Outside Contest Hours"
+
+def determine_contest_dates(df):
+    """Determine contest day assignments from the actual QSO dates in the log.
+    
+    The ARRL 10 GHz contest runs over two weekends. This function groups
+    dates into contest weekends and assigns day numbers sequentially.
+    """
+    unique_dates = []
+    for date_str in df['date'].unique():
+        try:
+            if '/' in str(date_str):
+                date_parts = str(date_str).split('/')
+                if len(date_parts[2]) == 4:
+                    dt = datetime.strptime(str(date_str), '%m/%d/%Y')
+                else:
+                    dt = datetime.strptime(str(date_str), '%m/%d/%y')
+            else:
+                dt = datetime.strptime(str(date_str), '%Y-%m-%d')
+            unique_dates.append(dt)
+        except:
+            continue
+    
+    if not unique_dates:
+        return {}
+    
+    unique_dates.sort()
+    
+    # Group dates into weekends (dates within 3 days of each other are same weekend)
+    weekends = []
+    current_weekend = [unique_dates[0]]
+    
+    for i in range(1, len(unique_dates)):
+        if (unique_dates[i] - current_weekend[-1]).days <= 3:
+            current_weekend.append(unique_dates[i])
+        else:
+            weekends.append(current_weekend)
+            current_weekend = [unique_dates[i]]
+    weekends.append(current_weekend)
+    
+    # Assign day numbers sequentially across weekends
+    contest_dates = {}
+    day_num = 1
+    for weekend in weekends:
+        for date in weekend:
+            contest_dates[date.strftime('%Y-%m-%d')] = day_num
+            day_num += 1
+    
+    return contest_dates
 
 def normalize_band(band):
     """Normalize band name to standard GHz format"""
@@ -250,17 +292,20 @@ def create_polar_plot(day_data, day_name):
 
 def main():
     # Get data
-    contact_data = get_data_source()
+    contact_data, callsign = get_data_source()
     
     # Forward fill empty cells
-    contact_data = contact_data.fillna(method='ffill')
+    contact_data = contact_data.ffill()
     
     # Clean data
     contact_data = contact_data.dropna(subset=['call'])
     
+    # Determine contest dates dynamically from the data
+    contest_dates = determine_contest_dates(contact_data)
+    
     # Add analysis columns
     contact_data['datetime'] = contact_data.apply(lambda row: parse_datetime(row['date'], row['time']), axis=1)
-    contact_data['contest_day'] = contact_data['datetime'].apply(categorize_contest_day)
+    contact_data['contest_day'] = contact_data['datetime'].apply(lambda dt: categorize_contest_day(dt, contest_dates))
     contact_data['distance'] = contact_data.apply(lambda row: calculate_distance(row['sourcegrid'], row['grid']), axis=1)
     contact_data['bearing'] = contact_data.apply(lambda row: calculate_bearing(row['sourcegrid'], row['grid']), axis=1)
     contact_data['direction'] = contact_data['bearing'].apply(get_direction)
@@ -271,12 +316,10 @@ def main():
     contact_data['day_number'] = contact_data['contest_day'].str.extract(r'Day (\d+)')[0]
     contest_days = contact_data[contact_data['day_number'].notna()].groupby('day_number')
     
-    # Get callsign and last date for filename
-    callsign = "K2UA"
+    # Get last date for filename
     last_date = max(contact_data['date'].unique())
     if '/' in str(last_date):
         try:
-            from datetime import datetime
             date_obj = datetime.strptime(str(last_date), '%m/%d/%Y')
             date_str = date_obj.strftime('%Y%m%d')
         except:

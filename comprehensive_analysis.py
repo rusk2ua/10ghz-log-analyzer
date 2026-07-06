@@ -356,15 +356,20 @@ def generate_comprehensive_analysis(df):
     return '\n'.join(lines)
 
 def parse_cabrillo_file(filename):
-    """Parse Cabrillo log file and return DataFrame"""
+    """Parse Cabrillo log file and return DataFrame and callsign"""
     qsos = []
+    callsign = None
     
     with open(filename, 'r') as f:
         for line in f:
             line = line.strip()
-            if line.startswith('QSO:'):
+            if line.startswith('CALLSIGN:'):
+                callsign = line.split(':',1)[1].strip().upper()
+            elif line.startswith('QSO:'):
                 parts = line.split()
                 if len(parts) >= 8:
+                    if callsign is None:
+                        callsign = parts[5].upper()
                     qsos.append({
                         'date': parts[3],
                         'band': parts[1],
@@ -373,10 +378,10 @@ def parse_cabrillo_file(filename):
                         'call': parts[7],
                         'grid': parts[8] if len(parts) > 8 else ''
                     })
-    return pd.DataFrame(qsos)
+    return pd.DataFrame(qsos), callsign or "UNKNOWN"
 
 def get_data_source():
-    """Determine data source and load data"""
+    """Determine data source and load data. Returns (DataFrame, callsign)."""
     import sys
     import os
     
@@ -393,13 +398,13 @@ def get_data_source():
     df = get_sheet_data(sheet_url)
     contact_data = df.iloc[2:].copy()
     contact_data.columns = ['date', 'band', 'sourcegrid', 'time', 'call', 'grid']
-    return contact_data
+    return contact_data, "UNKNOWN"
 
 def main():
-    contact_data = get_data_source()
+    contact_data, callsign = get_data_source()
     
     # Forward fill empty cells
-    contact_data = contact_data.fillna(method='ffill')
+    contact_data = contact_data.ffill()
     
     # Clean data
     contact_data = contact_data.dropna(subset=['call'])
@@ -408,7 +413,7 @@ def main():
     analysis = generate_comprehensive_analysis(contact_data)
     
     # Generate unique filename
-    filename = get_output_filename(contact_data, "Comprehensive_Analysis")
+    filename = get_output_filename(contact_data, "Comprehensive_Analysis", callsign)
     
     # Save report
     with open(filename, 'w') as f:
@@ -422,11 +427,10 @@ def main():
     print("- Band, directional, and time analysis")
     print("- Operating location statistics")
 
-def get_output_filename(contact_data, base_name):
+def get_output_filename(contact_data, base_name, callsign="UNKNOWN"):
     """Generate unique filename based on callsign and last contest date"""
     dates = contact_data['date'].unique()
     last_date = max(dates)
-    callsign = "K2UA"
     
     # Handle different date formats
     if '/' in str(last_date):

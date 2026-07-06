@@ -89,22 +89,11 @@ def parse_datetime(date_str, time_str):
     except:
         return None
 
-def categorize_contest_day(dt):
-    """Categorize QSO into contest day periods"""
+def categorize_contest_day(dt, contest_dates):
+    """Categorize QSO into contest day periods using dynamically determined dates"""
     if dt is None:
         return "Unknown"
     
-    # Expanded contest day mapping to include Monday activity
-    contest_dates = {
-        '2025-08-16': 1,
-        '2025-08-17': 2, 
-        '2025-08-18': 2,  # Extended to include Monday
-        '2025-09-20': 3,
-        '2025-09-21': 4,
-        '2025-09-22': 4   # Extended to include Monday
-    }
-    
-    # Expanded contest period: all hours on contest dates
     date_key = dt.strftime('%Y-%m-%d')
     day_num = contest_dates.get(date_key)
     
@@ -112,6 +101,55 @@ def categorize_contest_day(dt):
         return f"{date_key} Day {day_num}"
     else:
         return "Outside Contest Hours"
+
+def determine_contest_dates(df):
+    """Determine contest day assignments from the actual QSO dates in the log.
+    
+    The ARRL 10 GHz contest runs over two weekends. This function groups
+    dates into contest weekends and assigns day numbers sequentially.
+    """
+    # Parse all unique dates from the data
+    unique_dates = []
+    for date_str in df['date'].unique():
+        try:
+            if '/' in str(date_str):
+                date_parts = str(date_str).split('/')
+                if len(date_parts[2]) == 4:
+                    dt = datetime.strptime(str(date_str), '%m/%d/%Y')
+                else:
+                    dt = datetime.strptime(str(date_str), '%m/%d/%y')
+            else:
+                dt = datetime.strptime(str(date_str), '%Y-%m-%d')
+            unique_dates.append(dt)
+        except:
+            continue
+    
+    if not unique_dates:
+        return {}
+    
+    unique_dates.sort()
+    
+    # Group dates into weekends (dates within 3 days of each other are same weekend)
+    weekends = []
+    current_weekend = [unique_dates[0]]
+    
+    for i in range(1, len(unique_dates)):
+        if (unique_dates[i] - current_weekend[-1]).days <= 3:
+            current_weekend.append(unique_dates[i])
+        else:
+            weekends.append(current_weekend)
+            current_weekend = [unique_dates[i]]
+    weekends.append(current_weekend)
+    
+    # Assign day numbers sequentially across weekends
+    contest_dates = {}
+    day_num = 1
+    for weekend in weekends:
+        for date in weekend:
+            contest_dates[date.strftime('%Y-%m-%d')] = day_num
+            day_num += 1
+    
+    return contest_dates
 
 def get_band_multiplier(band):
     """Get points per km multiplier based on band"""
@@ -155,9 +193,12 @@ def analyze_weekend_activity(df):
     lines.append("=" * 65)
     lines.append("")
     
+    # Determine contest dates dynamically from the data
+    contest_dates = determine_contest_dates(df)
+    
     # Parse datetime and add analysis columns
     df['datetime'] = df.apply(lambda row: parse_datetime(row['date'], row['time']), axis=1)
-    df['contest_day'] = df['datetime'].apply(categorize_contest_day)
+    df['contest_day'] = df['datetime'].apply(lambda dt: categorize_contest_day(dt, contest_dates))
     df['distance'] = df.apply(lambda row: calculate_distance(row['sourcegrid'], row['grid']), axis=1)
     df['bearing'] = df.apply(lambda row: calculate_bearing(row['sourcegrid'], row['grid']), axis=1)
     df['direction'] = df['bearing'].apply(get_direction)
@@ -340,16 +381,21 @@ def analyze_weekend_activity(df):
     return '\n'.join(lines)
 
 def parse_cabrillo_file(filename):
-    """Parse Cabrillo log file and return DataFrame"""
+    """Parse Cabrillo log file and return DataFrame and callsign"""
     qsos = []
+    callsign = None
     
     with open(filename, 'r') as f:
         for line in f:
             line = line.strip()
-            if line.startswith('QSO:'):
+            if line.startswith('CALLSIGN:'):
+                callsign = line.split(':',1)[1].strip().upper()
+            elif line.startswith('QSO:'):
                 # QSO: 10G CW 2025-08-16 1135 K2UA EN81PM KE2AIZ FN12EU
                 parts = line.split()
                 if len(parts) >= 8:
+                    if callsign is None:
+                        callsign = parts[5].upper()
                     band = parts[1]
                     date = parts[3]
                     time = parts[4]
@@ -366,10 +412,10 @@ def parse_cabrillo_file(filename):
                         'grid': grid
                     })
     
-    return pd.DataFrame(qsos)
+    return pd.DataFrame(qsos), callsign or "UNKNOWN"
 
 def get_data_source():
-    """Determine data source and load data"""
+    """Determine data source and load data. Returns (DataFrame, callsign)."""
     import sys
     import os
     
@@ -393,13 +439,12 @@ def get_data_source():
     df = get_sheet_data(sheet_url)
     contact_data = df.iloc[2:].copy()
     contact_data.columns = ['date', 'band', 'sourcegrid', 'time', 'call', 'grid']
-    return contact_data
+    return contact_data, "UNKNOWN"
 
-def get_output_filename(contact_data, base_name):
+def get_output_filename(contact_data, base_name, callsign="UNKNOWN"):
     """Generate unique filename based on callsign and last contest date"""
     dates = contact_data['date'].unique()
     last_date = max(dates)
-    callsign = "K2UA"
     
     # Handle different date formats
     if '/' in str(last_date):
@@ -418,10 +463,10 @@ def get_output_filename(contact_data, base_name):
 
 def main():
     # Get data from appropriate source
-    contact_data = get_data_source()
+    contact_data, callsign = get_data_source()
     
     # Forward fill empty cells
-    contact_data = contact_data.fillna(method='ffill')
+    contact_data = contact_data.ffill()
     
     # Clean data
     contact_data = contact_data.dropna(subset=['call'])
@@ -430,7 +475,7 @@ def main():
     analysis = analyze_weekend_activity(contact_data)
     
     # Generate unique filename
-    filename = get_output_filename(contact_data, "Weekend_Analysis")
+    filename = get_output_filename(contact_data, "Weekend_Analysis", callsign)
     
     # Save report
     with open(filename, 'w') as f:

@@ -13,7 +13,14 @@ Python script to convert Google Sheets contest logs to Cabrillo format for the A
 
 ## Version
 
-Current version: **v1.3.0**
+Current version: **v1.4.0**
+
+## New in v1.4.0
+- Removed hardcoded callsign from output filenames; callsign is now extracted from Cabrillo file header or QSO lines
+- Removed hardcoded contest year; contest dates are now determined dynamically from log data
+- Added matplotlib as an explicit dependency for directional analysis
+- Fixed deprecated pandas `fillna(method='ffill')` calls
+- Removed dead code in Cabrillo generator
 
 ## New in v1.3.0
 - Added multi-log comparison functionality (up to 4 logs)
@@ -39,7 +46,7 @@ Current version: **v1.3.0**
 ```bash
 python3 -m venv venv
 source venv/bin/activate
-pip install pandas requests
+pip install pandas requests matplotlib
 ```
 
 2. Run the script:
@@ -95,3 +102,4 @@ python log_comparison.py station1.log station2.log station3.log
 - Python 3.x
 - pandas
 - requests
+- matplotlib (for directional analysis visualization)
