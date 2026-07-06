@@ -6,7 +6,7 @@ from io import StringIO
 from datetime import datetime
 import math
 
-VERSION = "1.4.0"
+VERSION = "1.4.1"
 
 def get_sheet_data(sheet_url):
     """Convert Google Sheets URL to CSV export URL and fetch data"""
