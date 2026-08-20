@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 import math
 import sys
 
-from data_source import resolve_source, source_label, build_multi_source_arg_parser
+from data_source import resolve_source, source_label, build_multi_source_arg_parser, normalize_band
 
 def grid_to_latlon(grid):
     """Convert 6-digit Maidenhead grid to lat/lon"""
@@ -37,16 +37,6 @@ def calculate_distance(grid1, grid2):
     dlon = lon2 - lon1
     a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
     return R * 2 * math.asin(math.sqrt(a))
-
-def normalize_band(band):
-    """Normalize band name to standard GHz format"""
-    band_str = str(band).strip().lower()
-    if 'g' in band_str:
-        import re
-        match = re.search(r'(\d+)', band_str)
-        if match:
-            return f"{match.group(1)} GHz"
-    return str(band)
 
 def analyze_log(df, callsign, filename):
     """Analyze a single log and return key metrics"""

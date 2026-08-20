@@ -4,7 +4,10 @@ import math
 from datetime import datetime, timedelta
 from collections import defaultdict
 
-from data_source import load_source_or_exit, build_arg_parser
+from data_source import (
+    load_source_or_exit, build_arg_parser,
+    normalize_band, band_multiplier, BAND_ORDER,
+)
 
 def grid_to_latlon(grid):
     """Convert 6-digit Maidenhead grid to lat/lon"""
@@ -59,33 +62,6 @@ def get_direction(bearing):
     idx = round(bearing / 22.5) % 16
     return directions[idx]
 
-def normalize_band(band):
-    """Normalize band name to standard format"""
-    band_str = str(band).strip().lower()
-    if 'ghz' in band_str:
-        import re
-        match = re.search(r'(\d+)', band_str)
-        if match:
-            number = match.group(1)
-            return f"{number} GHz"
-    return str(band).strip()
-
-def get_band_multiplier(band):
-    """Get points per km multiplier based on band"""
-    band_str = str(band).lower().replace(' ', '')
-    if '10ghz' in band_str or '10g' in band_str:
-        return 1
-    elif '24ghz' in band_str or '24g' in band_str:
-        return 2
-    elif '47ghz' in band_str or '47g' in band_str:
-        return 3
-    elif '78ghz' in band_str or '75g' in band_str or '76g' in band_str:
-        return 4
-    elif '122ghz' in band_str or '119g' in band_str or '120g' in band_str:
-        return 5
-    else:
-        return 1
-
 def parse_datetime(date_str, time_str):
     """Parse date and time strings into datetime object"""
     try:
@@ -121,7 +97,7 @@ def generate_comprehensive_analysis(df):
     df['bearing'] = df.apply(lambda row: calculate_bearing(row['sourcegrid'], row['grid']), axis=1)
     df['direction'] = df['bearing'].apply(get_direction)
     df['band_normalized'] = df['band'].apply(normalize_band)
-    df['band_multiplier'] = df['band'].apply(get_band_multiplier)
+    df['band_multiplier'] = df['band'].apply(band_multiplier)
     df['points'] = df.apply(lambda row: max(1, math.ceil(row['distance'])) * row['band_multiplier'], axis=1)
     df['datetime'] = df.apply(lambda row: parse_datetime(row['date'], row['time']), axis=1)
     
@@ -229,16 +205,11 @@ def generate_comprehensive_analysis(df):
         lines.append(f"  Average Distance: {data['avg_distance']:.1f} km")
         lines.append("  Band Breakdown:")
         
-        band_order = ['10 GHz', '24 GHz', '47 GHz', '78 GHz', '122 GHz']
-        for band_name in band_order:
-            matching_band = None
-            for band in data['bands'].keys():
-                if band_name.split()[0].lower() in str(band).lower():
-                    matching_band = band
-                    break
-            
-            if matching_band:
-                band_info = data['bands'][matching_band]
+        # data['bands'] is keyed by canonical display name (via
+        # normalize_band), so this is a direct lookup against BAND_ORDER.
+        for band_name in BAND_ORDER:
+            if band_name in data['bands']:
+                band_info = data['bands'][band_name]
                 lines.append(f"    {band_name}: {band_info['count']} QSOs, Best DX: {band_info['best_dx']:.1f} km, Points: {band_info['total_points']}")
         
         lines.append("")
@@ -356,12 +327,6 @@ def main():
 
     contact_data, callsign = load_source_or_exit(args.source)
 
-    # Forward fill empty cells
-    contact_data = contact_data.ffill()
-    
-    # Clean data
-    contact_data = contact_data.dropna(subset=['call'])
-    
     # Generate comprehensive analysis
     analysis = generate_comprehensive_analysis(contact_data)
     

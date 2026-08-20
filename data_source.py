@@ -18,6 +18,13 @@ directory, then in logs/, before falling back to this project's default
 
 Raw QSO data is always normalized to these six columns:
     date, band, sourcegrid, time, call, grid
+
+resolve_source() (and load_source_or_exit()) always return data that has
+already been forward-filled (date/band/sourcegrid/time -- never call/grid,
+which must always be explicit on every QSO) and cleaned of blank rows, and
+band values have already been run through normalize_band() so they're
+consistent no matter which source format they came from. Callers should NOT
+call .ffill() themselves.
 """
 
 import argparse
@@ -31,6 +38,72 @@ import requests
 RAW_COLUMNS = ['date', 'band', 'sourcegrid', 'time', 'call', 'grid']
 DEFAULT_SHEET_URL = "https://docs.google.com/spreadsheets/d/1UFbxzWJBpPdUEkfLhNA6csKbHaNypDmGeWpaeP-bQyA/edit?usp=sharing"
 LOGS_DIR = "logs"
+
+# Canonical band buckets for the ARRL 10 GHz and Up contest. Some adjacent
+# microwave allocations share one band category -- e.g. the 75.5-81 GHz
+# amateur allocation is commonly called "78 GHz" by operators but uses the
+# Cabrillo band code "75G". Log data may carry any of: a bare number from a
+# raw QSO sheet ("78"), a full name ("78 GHz"), or a Cabrillo code ("75G").
+# This table is the single source of truth for mapping all of those to one
+# canonical display name, Cabrillo code, and scoring multiplier -- every
+# script imports normalize_band/band_to_cabrillo/band_multiplier from here
+# instead of keeping its own copy, which is what let bands go missing or
+# get mismatched between scripts in the first place.
+BAND_BUCKETS = [
+    # (display name, Cabrillo code, points-per-km multiplier, raw aliases)
+    ("10 GHz",  "10G",  1,  ("10",)),
+    ("24 GHz",  "24G",  2,  ("24",)),
+    ("47 GHz",  "47G",  3,  ("47",)),
+    ("78 GHz",  "75G",  4,  ("78", "75", "76")),
+    ("122 GHz", "123G", 5,  ("122", "119", "120", "123")),
+    ("142 GHz", "142G", 6,  ("142",)),
+    ("241 GHz", "241G", 10, ("241",)),
+    ("300 GHz", "300G", 10, ("300",)),
+]
+
+BAND_ORDER = [display for display, _, _, _ in BAND_BUCKETS]
+
+
+def _build_band_lookup():
+    lookup = {}
+    for display, code, multiplier, aliases in BAND_BUCKETS:
+        keys = set(aliases)
+        keys.add(code.lower())
+        keys.add(display.lower().replace(' ', ''))
+        for alias in aliases:
+            keys.add(f"{alias}g")
+            keys.add(f"{alias}ghz")
+        for key in keys:
+            lookup[key] = (display, code, multiplier)
+    return lookup
+
+
+_BAND_LOOKUP = _build_band_lookup()
+
+
+def _band_key(band):
+    return str(band).strip().lower().replace(' ', '')
+
+
+def normalize_band(band):
+    """Canonical display name for a band, e.g. '78 GHz' -- regardless of
+    whether the input is a bare number ('78'), a Cabrillo code ('75G'), or
+    already a full name ('78 GHz'). Falls back to the stripped input for an
+    unrecognized value rather than guessing."""
+    hit = _BAND_LOOKUP.get(_band_key(band))
+    return hit[0] if hit else str(band).strip()
+
+
+def band_to_cabrillo(band):
+    """Cabrillo band code for a band, e.g. '75G'."""
+    hit = _BAND_LOOKUP.get(_band_key(band))
+    return hit[1] if hit else str(band).strip().upper()
+
+
+def band_multiplier(band):
+    """Points-per-km scoring multiplier for a band."""
+    hit = _BAND_LOOKUP.get(_band_key(band))
+    return hit[2] if hit else 1
 
 SOURCE_HELP = (
     "Path to a local Cabrillo .log file, a local raw QSO .csv file (drop one "
@@ -122,6 +195,31 @@ def parse_cabrillo_file(filename):
     return pd.DataFrame(qsos), callsign or "UNKNOWN"
 
 
+def _fill_and_clean(df):
+    """Forward-fill only the columns that are conventionally left blank on
+    repeat rows (date, band, sourcegrid, time) -- the common spreadsheet
+    convention of omitting a value that hasn't changed since the previous
+    QSO (including the clock minute, when two contacts land in the same
+    minute). call and grid are deliberately NEVER forward-filled: a row
+    with no call sign isn't a real QSO (often just a stray blank line from
+    the spreadsheet), and forward-filling it would silently manufacture a
+    phantom duplicate contact using the call/grid from the row above.
+    """
+    df = df.copy()
+    fill_cols = [c for c in ('date', 'band', 'sourcegrid', 'time') if c in df.columns]
+    if fill_cols:
+        df[fill_cols] = df[fill_cols].ffill()
+    if 'call' in df.columns:
+        df = df.dropna(subset=['call'])
+        df = df[df['call'].astype(str).str.strip() != '']
+    if 'band' in df.columns:
+        # Normalize once, here, so every script downstream sees the same
+        # canonical band name regardless of whether it came from a bare
+        # number ("78"), a Cabrillo code ("75G"), or a full name.
+        df['band'] = df['band'].apply(normalize_band)
+    return df.reset_index(drop=True)
+
+
 def find_local_log():
     """Look for a .log file in the current directory, then in logs/."""
     for pattern in ('*.log', os.path.join(LOGS_DIR, '*.log')):
@@ -150,21 +248,21 @@ def resolve_source(cli_arg=None, default_url=DEFAULT_SHEET_URL, verbose=True):
     if is_google_sheets_url(source):
         if verbose:
             print("Loading from Google Sheets...")
-        return fetch_sheet_raw(source), "UNKNOWN"
-
-    if not os.path.exists(source):
+        df, callsign = fetch_sheet_raw(source), "UNKNOWN"
+    elif not os.path.exists(source):
         raise FileNotFoundError(
             f"'{source}' is not a local file and not a recognized Google Sheets URL."
         )
-
-    if source.lower().endswith('.log'):
+    elif source.lower().endswith('.log'):
         if verbose:
             print(f"Loading Cabrillo file: {source}")
-        return parse_cabrillo_file(source)
+        df, callsign = parse_cabrillo_file(source)
+    else:
+        if verbose:
+            print(f"Loading raw QSO CSV: {source}")
+        df, callsign = load_local_raw_csv(source), "UNKNOWN"
 
-    if verbose:
-        print(f"Loading raw QSO CSV: {source}")
-    return load_local_raw_csv(source), "UNKNOWN"
+    return _fill_and_clean(df), callsign
 
 
 def load_source_or_exit(cli_arg=None, default_url=DEFAULT_SHEET_URL, verbose=True):

@@ -3,9 +3,12 @@
 from datetime import datetime
 import math
 
-from data_source import load_source_or_exit, build_arg_parser
+from data_source import (
+    load_source_or_exit, build_arg_parser,
+    normalize_band, band_multiplier, band_to_cabrillo, BAND_ORDER,
+)
 
-VERSION = "1.5.0"
+VERSION = "1.5.1"
 
 def grid_to_latlon(grid):
     """Convert 6-digit Maidenhead grid to lat/lon"""
@@ -38,19 +41,6 @@ def calculate_distance(grid1, grid2):
     a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
     return 6371 * 2 * math.asin(math.sqrt(a))
 
-def normalize_band(band):
-    """Normalize band name to standard format"""
-    band_str = str(band).strip().lower()
-    # Replace various ghz formats with standard GHz
-    if 'ghz' in band_str:
-        # Extract number and replace with standard format
-        import re
-        match = re.search(r'(\d+)', band_str)
-        if match:
-            number = match.group(1)
-            return f"{number} GHz"
-    return str(band).strip()
-
 def generate_summary(df, header_info, total_score):
     """Generate plain-text summary matching the screenshot format"""
     lines = []
@@ -70,8 +60,8 @@ def generate_summary(df, header_info, total_score):
         call = row['call'].upper()
         distance = calculate_distance(row['sourcegrid'], row['grid'])
         distance_km = max(1, math.ceil(distance))
-        band_multiplier = get_band_multiplier(band)
-        points = distance_km * band_multiplier
+        multiplier = band_multiplier(band)
+        points = distance_km * multiplier
         
         if band not in band_stats:
             band_stats[band] = {
@@ -86,23 +76,16 @@ def generate_summary(df, header_info, total_score):
         band_stats[band]['unique_calls'].add(call)
         band_stats[band]['best_dx'] = max(band_stats[band]['best_dx'], math.ceil(distance))
     
-    # Sort bands by frequency
-    band_order = ['10 GHz', '24 GHz', '47 GHz', '78 GHz', '122 GHz', '241 GHz', '300 GHz']
-    
+    # Sort bands by frequency (band_stats keys are already canonical display
+    # names, e.g. "78 GHz", via normalize_band -- so this is a direct lookup,
+    # not a substring match against band_order)
     total_qsos = 0
     total_points = 0
     total_unique = set()
-    
-    for band_name in band_order:
-        # Find matching band in data
-        matching_band = None
-        for band in band_stats.keys():
-            if band_name.split()[0].lower() in str(band).lower():
-                matching_band = band
-                break
-        
-        if matching_band:
-            stats = band_stats[matching_band]
+
+    for band_name in BAND_ORDER:
+        if band_name in band_stats:
+            stats = band_stats[band_name]
             qsos = stats['qsos']
             distance_points = stats['points']
             unique_calls = len(stats['unique_calls'])
@@ -128,26 +111,6 @@ def generate_summary(df, header_info, total_score):
     lines.append(f"Total\t\t{len(df)}\t\t{total_score}\t\t{total_unique_sum}")
     
     return '\n'.join(lines)
-
-def get_band_multiplier(band):
-    """Get points per km multiplier based on band"""
-    band_str = str(band).lower().replace(' ', '')
-    if '10ghz' in band_str or '10g' in band_str:
-        return 1
-    elif '24ghz' in band_str or '24g' in band_str:
-        return 2
-    elif '47ghz' in band_str or '47g' in band_str:
-        return 3
-    elif '78ghz' in band_str or '75g' in band_str or '76g' in band_str:
-        return 4
-    elif '122ghz' in band_str or '119g' in band_str or '120g' in band_str:
-        return 5
-    elif '142ghz' in band_str or '142g' in band_str:
-        return 6
-    elif '241ghz' in band_str or '241g' in band_str:
-        return 10
-    else:
-        return 1  # Default multiplier
 
 def check_duplicates(df):
     """Check for duplicate contacts (same call, source grid, destination grid, and band)"""
@@ -194,11 +157,11 @@ def calculate_score(df):
         # Distance points with band multiplier and minimum of 1 km
         distance = calculate_distance(row['sourcegrid'], row['grid'])
         distance_km = max(1, math.ceil(distance))  # Round up and minimum 1 km per QSO
-        band_multiplier = get_band_multiplier(row['band'])
-        distance_points = distance_km * band_multiplier
+        multiplier = band_multiplier(row['band'])
+        distance_points = distance_km * multiplier
         total_score += distance_points
-        
-        print(f"{row['call'].upper()}: {distance:.1f} km → {distance_km} km × {band_multiplier} ({row['band']}) = {distance_points} points")
+
+        print(f"{row['call'].upper()}: {distance:.1f} km → {distance_km} km × {multiplier} ({row['band']}) = {distance_points} points")
         
         # Track unique calls per band
         band = normalize_band(row['band'])
@@ -223,26 +186,6 @@ def calculate_score(df):
     
     return total_score + bonus_points
 
-def convert_band_to_cabrillo_format(band):
-    """Convert band to Cabrillo format (e.g., '10 GHz' -> '10G')"""
-    band_str = str(band).strip().lower()
-    if '10' in band_str:
-        return '10G'
-    elif '24' in band_str:
-        return '24G'
-    elif '47' in band_str:
-        return '47G'
-    elif '78' in band_str or '75' in band_str or '76' in band_str:
-        return '75G'
-    elif '122' in band_str or '119' in band_str or '120' in band_str:
-        return '123G'
-    elif '142' in band_str:
-        return '142G'
-    elif '241' in band_str:
-        return '241G'
-    else:
-        return str(band).upper()
-
 def generate_cabrillo(df, header_info):
     """Generate Cabrillo format output matching k2ua.log format"""
     lines = []
@@ -266,7 +209,7 @@ def generate_cabrillo(df, header_info):
         time_str = str(row['time']).zfill(4) if len(str(row['time'])) <= 4 else str(row['time'])[:4]
         
         # Convert band to Cabrillo format
-        band_formatted = convert_band_to_cabrillo_format(row['band'])
+        band_formatted = band_to_cabrillo(row['band'])
         
         # Format date as yyyy-mm-dd
         date_str = str(row['date'])
@@ -338,15 +281,10 @@ def main():
     )
     args = parser.parse_args()
 
-    # Get data
+    # Get data (already forward-filled, cleaned, and band-normalized by
+    # resolve_source)
     contact_data, _ = load_source_or_exit(args.source)
 
-    # Forward fill empty cells with values from above
-    contact_data = contact_data.ffill()
-    
-    # Clean data
-    contact_data = contact_data.dropna(subset=['call'])
-    
     # Get user input
     header_info = get_user_input()
     

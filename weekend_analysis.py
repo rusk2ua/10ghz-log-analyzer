@@ -4,7 +4,10 @@ import math
 from datetime import datetime, timedelta
 from collections import defaultdict
 
-from data_source import load_source_or_exit, build_arg_parser
+from data_source import (
+    load_source_or_exit, build_arg_parser,
+    normalize_band, band_multiplier,
+)
 
 def grid_to_latlon(grid):
     """Convert 6-digit Maidenhead grid to lat/lon"""
@@ -143,38 +146,11 @@ def determine_contest_dates(df):
     
     return contest_dates
 
-def get_band_multiplier(band):
-    """Get points per km multiplier based on band"""
-    band_str = str(band).lower().replace(' ', '')
-    if '10ghz' in band_str or '10g' in band_str:
-        return 1
-    elif '24ghz' in band_str or '24g' in band_str:
-        return 2
-    elif '47ghz' in band_str or '47g' in band_str:
-        return 3
-    elif '78ghz' in band_str or '78g' in band_str or '75g' in band_str:
-        return 4
-    elif '122ghz' in band_str or '122g' in band_str or '123g' in band_str:
-        return 5
-    else:
-        return 1
-
 def calculate_points(distance, band):
     """Calculate contest points for a QSO"""
     distance_km = max(1, math.ceil(distance))
-    band_multiplier = get_band_multiplier(band)
-    return distance_km * band_multiplier
-
-def normalize_band(band):
-    """Normalize band name to standard GHz format"""
-    band_str = str(band).strip().lower()
-    if 'ghz' in band_str:
-        import re
-        match = re.search(r'(\d+)', band_str)
-        if match:
-            number = match.group(1)
-            return f"{number} GHz"
-    return str(band).strip()
+    multiplier = band_multiplier(band)
+    return distance_km * multiplier
 
 def analyze_weekend_activity(df):
     """Generate detailed weekend analysis"""
@@ -402,12 +378,6 @@ def main():
     # Get data from appropriate source
     contact_data, callsign = load_source_or_exit(args.source)
 
-    # Forward fill empty cells
-    contact_data = contact_data.ffill()
-    
-    # Clean data
-    contact_data = contact_data.dropna(subset=['call'])
-    
     # Generate analysis
     analysis = analyze_weekend_activity(contact_data)
     

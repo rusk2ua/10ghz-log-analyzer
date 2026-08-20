@@ -13,7 +13,13 @@ Python script to convert Google Sheets contest logs to Cabrillo format for the A
 
 ## Version
 
-Current version: **v1.5.0**
+Current version: **v1.5.1**
+
+## New in v1.5.1
+- Fixed 78 GHz (and other bands whose Cabrillo code doesn't literally contain their name, e.g. "75G") disappearing from `station_report.py`, `weekend_analysis.py`, `comprehensive_analysis.py`, and `directional_visualization.py` when analyzing a Cabrillo log -- band matching is now a single canonical lookup in `data_source.py` (`normalize_band`/`band_to_cabrillo`/`band_multiplier`) instead of five slightly-different copies scattered across scripts, several of which didn't recognize Cabrillo band codes at all
+- Fixed a data-integrity bug where a stray blank row in a raw QSO sheet/CSV (e.g. an accidental empty line) got forward-filled on *every* column, including `call` and `grid` -- silently manufacturing a phantom duplicate QSO identical to the row above. Forward-fill is now scoped to `date`/`band`/`sourcegrid`/`time` only; a row with no call sign is dropped, never invented
+- `time` is now forward-filled like `date`/`band`/`sourcegrid` (two QSOs logged in the same clock minute are commonly left blank on the second row) -- previously this produced a malformed `0nan` timestamp in the generated Cabrillo file
+- `logs/README.md` and `data_source.py`'s docstrings updated to reflect the corrected forward-fill rules
 
 ## New in v1.5.0
 - Added a `logs/` folder for local contest logs, with sample files (`sample_qso_log.csv` and `sample_cabrillo.log`) so a fresh clone has something to run immediately

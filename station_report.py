@@ -2,7 +2,7 @@
 
 import math
 
-from data_source import load_source_or_exit, build_arg_parser
+from data_source import load_source_or_exit, build_arg_parser, normalize_band, BAND_ORDER
 
 def grid_to_latlon(grid):
     """Convert 6-digit Maidenhead grid to lat/lon"""
@@ -34,17 +34,6 @@ def calculate_distance(grid1, grid2):
     dlon = lon2 - lon1
     a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
     return 6371 * 2 * math.asin(math.sqrt(a))
-
-def normalize_band(band):
-    """Normalize band name to standard format"""
-    band_str = str(band).strip().lower()
-    if 'ghz' in band_str:
-        import re
-        match = re.search(r'(\d+)', band_str)
-        if match:
-            number = match.group(1)
-            return f"{number} GHz"
-    return str(band).strip()
 
 def generate_station_report(df):
     """Generate detailed station report"""
@@ -102,27 +91,20 @@ def generate_station_report(df):
     lines.append("=" * 60)
     lines.append("")
     
-    band_order = ['10 GHz', '24 GHz', '47 GHz', '78 GHz', '122 GHz', '241 GHz', '300 GHz']
-    
     for call, data in sorted_stations:
         lines.append(f"Station: {call}")
         lines.append(f"Total QSOs: {data['total_qsos']}, Best DX: {data['best_dx_overall']:.0f} km")
         lines.append("")
-        
+
         # Show band breakdown
         lines.append("Band\t\tQSOs\tBest DX (km)")
         lines.append("-" * 35)
-        
-        for band_name in band_order:
-            # Find matching band in data
-            matching_band = None
-            for band in data['bands'].keys():
-                if band_name.split()[0].lower() in str(band).lower():
-                    matching_band = band
-                    break
-            
-            if matching_band:
-                band_info = data['bands'][matching_band]
+
+        # data['bands'] is keyed by canonical display name (via
+        # normalize_band), so this is a direct lookup against BAND_ORDER.
+        for band_name in BAND_ORDER:
+            if band_name in data['bands']:
+                band_info = data['bands'][band_name]
                 lines.append(f"{band_name}\t\t{band_info['count']}\t{band_info['best_dx']:.0f}")
         
         lines.append("")
@@ -150,16 +132,10 @@ def generate_station_report(df):
     
     lines.append("Band\t\tUnique Stations\tTotal QSOs\tBest DX (km)")
     lines.append("-" * 55)
-    
-    for band_name in band_order:
-        matching_band = None
-        for band in band_summary.keys():
-            if band_name.split()[0].lower() in str(band).lower():
-                matching_band = band
-                break
-        
-        if matching_band:
-            summary = band_summary[matching_band]
+
+    for band_name in BAND_ORDER:
+        if band_name in band_summary:
+            summary = band_summary[band_name]
             lines.append(f"{band_name}\t\t{len(summary['unique_stations'])}\t\t{summary['total_qsos']}\t\t{summary['best_dx']:.0f}")
     
     return '\n'.join(lines)
@@ -173,12 +149,6 @@ def main():
 
     contact_data, callsign = load_source_or_exit(args.source)
 
-    # Forward fill empty cells
-    contact_data = contact_data.ffill()
-    
-    # Clean data
-    contact_data = contact_data.dropna(subset=['call'])
-    
     # Generate report
     report = generate_station_report(contact_data)
     

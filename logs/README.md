@@ -17,11 +17,15 @@ path to a file in here as its command-line argument.
   consumes this directly (to build a Cabrillo file); the analysis scripts
   will also read one if you point them at it.
 
-It's normal for `date`, `band`, and `sourcegrid` to be blank on a row when
-they haven't changed since the previous QSO -- that's exactly how most
-people keep a running log in a spreadsheet, and every script here
-forward-fills those blanks automatically. `time`, `call`, and `grid` should
-always be filled in on every row.
+It's normal for `date`, `band`, `sourcegrid`, and `time` to be blank on a
+row when they haven't changed since the previous QSO (including two
+contacts logged in the same clock minute) -- that's exactly how most people
+keep a running log in a spreadsheet, and every script here forward-fills
+those blanks automatically. `call` and `grid` should always be filled in on
+every row -- a row with a blank call is treated as a non-QSO (e.g. a stray
+blank separator line) and dropped rather than forward-filled, since
+guessing a call sign from the row above would silently invent a duplicate
+contact.
 
 ## Sample files
 
