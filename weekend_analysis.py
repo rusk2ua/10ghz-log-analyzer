@@ -1,18 +1,10 @@
 #!/usr/bin/env python3
 
-import pandas as pd
-import requests
-from io import StringIO
 import math
 from datetime import datetime, timedelta
 from collections import defaultdict
 
-def get_sheet_data(sheet_url):
-    """Convert Google Sheets URL to CSV export URL and fetch data"""
-    sheet_id = sheet_url.split('/d/')[1].split('/')[0]
-    csv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv"
-    response = requests.get(csv_url)
-    return pd.read_csv(StringIO(response.text))
+from data_source import load_source_or_exit, build_arg_parser
 
 def grid_to_latlon(grid):
     """Convert 6-digit Maidenhead grid to lat/lon"""
@@ -380,67 +372,6 @@ def analyze_weekend_activity(df):
     
     return '\n'.join(lines)
 
-def parse_cabrillo_file(filename):
-    """Parse Cabrillo log file and return DataFrame and callsign"""
-    qsos = []
-    callsign = None
-    
-    with open(filename, 'r') as f:
-        for line in f:
-            line = line.strip()
-            if line.startswith('CALLSIGN:'):
-                callsign = line.split(':',1)[1].strip().upper()
-            elif line.startswith('QSO:'):
-                # QSO: 10G CW 2025-08-16 1135 K2UA EN81PM KE2AIZ FN12EU
-                parts = line.split()
-                if len(parts) >= 8:
-                    if callsign is None:
-                        callsign = parts[5].upper()
-                    band = parts[1]
-                    date = parts[3]
-                    time = parts[4]
-                    sourcegrid = parts[6]
-                    call = parts[7]
-                    grid = parts[8] if len(parts) > 8 else ''
-                    
-                    qsos.append({
-                        'date': date,
-                        'band': band,
-                        'sourcegrid': sourcegrid,
-                        'time': time,
-                        'call': call,
-                        'grid': grid
-                    })
-    
-    return pd.DataFrame(qsos), callsign or "UNKNOWN"
-
-def get_data_source():
-    """Determine data source and load data. Returns (DataFrame, callsign)."""
-    import sys
-    import os
-    
-    # Check for command line argument
-    if len(sys.argv) > 1:
-        filename = sys.argv[1]
-        if os.path.exists(filename) and filename.lower().endswith('.log'):
-            print(f"Loading Cabrillo file: {filename}")
-            return parse_cabrillo_file(filename)
-    
-    # Check for local Cabrillo file
-    cabrillo_files = [f for f in os.listdir('.') if f.endswith('.log')]
-    if cabrillo_files:
-        filename = cabrillo_files[0]
-        print(f"Found Cabrillo file: {filename}")
-        return parse_cabrillo_file(filename)
-    
-    # Default to Google Sheets
-    print("Loading from Google Sheets...")
-    sheet_url = "https://docs.google.com/spreadsheets/d/1UFbxzWJBpPdUEkfLhNA6csKbHaNypDmGeWpaeP-bQyA/edit?usp=sharing"
-    df = get_sheet_data(sheet_url)
-    contact_data = df.iloc[2:].copy()
-    contact_data.columns = ['date', 'band', 'sourcegrid', 'time', 'call', 'grid']
-    return contact_data, "UNKNOWN"
-
 def get_output_filename(contact_data, base_name, callsign="UNKNOWN"):
     """Generate unique filename based on callsign and last contest date"""
     dates = contact_data['date'].unique()
@@ -462,9 +393,15 @@ def get_output_filename(contact_data, base_name, callsign="UNKNOWN"):
     return f"{callsign}_{base_name}_{last_date}.txt"
 
 def main():
+    parser = build_arg_parser(
+        "Generate a weekend-by-weekend contest breakdown from a Cabrillo "
+        "log, a raw QSO CSV, or a Google Sheets share URL."
+    )
+    args = parser.parse_args()
+
     # Get data from appropriate source
-    contact_data, callsign = get_data_source()
-    
+    contact_data, callsign = load_source_or_exit(args.source)
+
     # Forward fill empty cells
     contact_data = contact_data.ffill()
     

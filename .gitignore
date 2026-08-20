@@ -1,0 +1,10 @@
+.DS_Store
+__pycache__/
+*.pyc
+
+# Personal contest logs dropped in logs/ -- keep out of git by default.
+# Sample files are explicitly whitelisted below.
+logs/*.csv
+logs/*.log
+!logs/sample_qso_log.csv
+!logs/sample_cabrillo.log

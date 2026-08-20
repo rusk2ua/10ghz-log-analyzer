@@ -13,7 +13,14 @@ Python script to convert Google Sheets contest logs to Cabrillo format for the A
 
 ## Version
 
-Current version: **v1.4.1**
+Current version: **v1.5.0**
+
+## New in v1.5.0
+- Added a `logs/` folder for local contest logs, with sample files (`sample_qso_log.csv` and `sample_cabrillo.log`) so a fresh clone has something to run immediately
+- Every script now accepts a single `source` command-line argument (2-4 for `log_comparison.py`), which can be a local Cabrillo `.log` file, a local raw QSO `.csv` file, or a Google Sheets share URL -- `arrl_10ghz_cabrillo.py` previously had no CLI argument at all
+- Auto-detection (when no argument is given) now checks `logs/` in addition to the current directory
+- Added a shared `data_source.py` module so all six scripts load data the same way instead of each duplicating the same functions
+- Added `--help` to every script (via `argparse`)
 
 ## New in v1.4.1
 - Added detailed documentation for directional visualization script and its polar plot output
@@ -52,12 +59,41 @@ source venv/bin/activate
 pip install pandas requests matplotlib
 ```
 
-2. Run the script:
+2. Drop your own log into `logs/` (or point at a Google Sheets URL -- see
+   [Data Sources](#data-sources) below), then run the converter:
 ```bash
-python arrl_10ghz_cabrillo.py
+python arrl_10ghz_cabrillo.py logs/your_log.csv
 ```
 
 3. Follow the prompts to enter contest information
+
+Try it immediately with the bundled sample data (no setup required):
+```bash
+python arrl_10ghz_cabrillo.py logs/sample_qso_log.csv
+```
+
+## Data Sources
+
+Every script in this project takes a single optional `source` argument
+(`log_comparison.py` takes 2-4). It can be any of:
+
+- **A local Cabrillo `.log` file** -- e.g. `logs/sample_cabrillo.log`, or a
+  file produced by `arrl_10ghz_cabrillo.py`.
+- **A local raw QSO `.csv` file** -- e.g. `logs/sample_qso_log.csv`, shaped
+  like a Google Sheets export: columns `date, band, sourcegrid, time, call,
+  grid`. It's normal for `date`, `band`, and `sourcegrid` to be blank on a
+  row when they haven't changed since the previous QSO -- every script
+  forward-fills those automatically.
+- **A Google Sheets share URL** -- fetched live and forward-filled the same
+  way.
+
+If you omit the argument, each script auto-detects a `.log` file (checking
+the current directory, then `logs/`), and falls back to this project's
+default Google Sheets URL if nothing is found. Run any script with `--help`
+for the exact usage text.
+
+See `logs/README.md` for more on the sample files and the expected CSV
+format.
 
 ## Output Files
 
@@ -73,33 +109,37 @@ python arrl_10ghz_cabrillo.py
 
 ### Individual Log Analysis
 ```bash
-# Analyze from Google Sheets (default)
+# Auto-detect a .log file (current directory, then logs/), or fall back to
+# the default Google Sheets URL
 python station_report.py
 python weekend_analysis.py
 python comprehensive_analysis.py
 
-# Analyze from Cabrillo file
-python station_report.py logfile.log
-python weekend_analysis.py logfile.log
-python comprehensive_analysis.py logfile.log
+# Analyze a specific Cabrillo file, raw QSO CSV, or Google Sheets URL
+python station_report.py logs/mylog.log
+python weekend_analysis.py logs/mylog.log
+python comprehensive_analysis.py logs/mylog.log
+
+# Try it with the bundled sample data
+python station_report.py logs/sample_cabrillo.log
 ```
 
 ### Multi-Log Comparison
 ```bash
-# Compare 2-4 log files
-python log_comparison.py log1.log log2.log [log3.log] [log4.log]
+# Compare 2-4 sources -- Cabrillo files, raw QSO CSVs, or Google Sheets URLs
+python log_comparison.py source1 source2 [source3] [source4]
 
 # Examples
-python log_comparison.py k2ua_2022.log k2ua_2023.log
+python log_comparison.py logs/k2ua_2025.log logs/k2ua_2026.log
 python log_comparison.py station1.log station2.log station3.log
 ```
 
 ### Directional Visualization
 ```bash
-# Generate polar plots from a Cabrillo file
-python directional_visualization.py logfile.log
+# Generate polar plots from a Cabrillo file, raw QSO CSV, or Google Sheets URL
+python directional_visualization.py logs/mylog.log
 
-# Or let it auto-detect a .log file in the current directory
+# Or let it auto-detect a .log file (current directory, then logs/)
 python directional_visualization.py
 ```
 

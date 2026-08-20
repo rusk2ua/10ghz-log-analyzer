@@ -1,19 +1,11 @@
 #!/usr/bin/env python3
 
-import pandas as pd
-import requests
-from io import StringIO
 from datetime import datetime
 import math
 
-VERSION = "1.4.1"
+from data_source import load_source_or_exit, build_arg_parser
 
-def get_sheet_data(sheet_url):
-    """Convert Google Sheets URL to CSV export URL and fetch data"""
-    sheet_id = sheet_url.split('/d/')[1].split('/')[0]
-    csv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv"
-    response = requests.get(csv_url)
-    return pd.read_csv(StringIO(response.text))
+VERSION = "1.5.0"
 
 def grid_to_latlon(grid):
     """Convert 6-digit Maidenhead grid to lat/lon"""
@@ -340,15 +332,15 @@ def get_user_input():
     }
 
 def main():
-    sheet_url = "https://docs.google.com/spreadsheets/d/1UFbxzWJBpPdUEkfLhNA6csKbHaNypDmGeWpaeP-bQyA/edit?usp=sharing"
-    
+    parser = build_arg_parser(
+        "Convert a raw QSO log (Google Sheets export or logs/*.csv) into a "
+        "Cabrillo-format contest log for the ARRL 10 GHz and Up Contest."
+    )
+    args = parser.parse_args()
+
     # Get data
-    df = get_sheet_data(sheet_url)
-    
-    # Skip header rows and get contact data
-    contact_data = df.iloc[2:].copy()  # Skip first 2 header rows
-    contact_data.columns = ['date', 'band', 'sourcegrid', 'time', 'call', 'grid']
-    
+    contact_data, _ = load_source_or_exit(args.source)
+
     # Forward fill empty cells with values from above
     contact_data = contact_data.ffill()
     

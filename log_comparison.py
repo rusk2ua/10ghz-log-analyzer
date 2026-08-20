@@ -1,35 +1,10 @@
 #!/usr/bin/env python3
 
-import pandas as pd
-import sys
-import os
 from datetime import datetime, timedelta
 import math
+import sys
 
-def parse_cabrillo_file(filename):
-    """Parse Cabrillo log file and return DataFrame with metadata"""
-    qsos = []
-    callsign = "UNKNOWN"
-    
-    with open(filename, 'r') as f:
-        for line in f:
-            line = line.strip()
-            if line.startswith('CALLSIGN:'):
-                callsign = line.split(':')[1].strip()
-            elif line.startswith('QSO:'):
-                parts = line.split()
-                if len(parts) >= 8:
-                    qsos.append({
-                        'date': parts[3],
-                        'band': parts[1],
-                        'sourcegrid': parts[6],
-                        'time': parts[4],
-                        'call': parts[7],
-                        'grid': parts[8] if len(parts) > 8 else ''
-                    })
-    
-    df = pd.DataFrame(qsos)
-    return df, callsign, os.path.basename(filename)
+from data_source import resolve_source, source_label, build_multi_source_arg_parser
 
 def grid_to_latlon(grid):
     """Convert 6-digit Maidenhead grid to lat/lon"""
@@ -241,28 +216,36 @@ def generate_comparison_report(analyses):
     return '\n'.join(lines)
 
 def main():
-    if len(sys.argv) < 3:
+    parser = build_multi_source_arg_parser(
+        "Compare 2-4 contest logs side by side. Each source may be a "
+        "Cabrillo .log file, a raw QSO CSV, or a Google Sheets share URL."
+    )
+    args = parser.parse_args()
+
+    if len(args.sources) < 2:
+        print("Error: Need at least 2 sources for comparison")
         print("Usage: python log_comparison.py <log1.log> <log2.log> [log3.log] [log4.log]")
         print("Example: python log_comparison.py k2ua_2022.log k2ua_2023.log")
         sys.exit(1)
-    
-    log_files = sys.argv[1:5]  # Max 4 files
+
+    sources = args.sources[:4]  # Max 4 sources
     analyses = []
-    
+
     print("Loading and analyzing log files...")
-    for filename in log_files:
-        if not os.path.exists(filename):
-            print(f"Error: File {filename} not found")
-            continue
-        
+    for source in sources:
+        label = source_label(source)
         try:
-            df, callsign, basename = parse_cabrillo_file(filename)
-            analysis = analyze_log(df, callsign, basename)
+            df, callsign = resolve_source(source, verbose=False)
+            if callsign == "UNKNOWN":
+                # Cabrillo files carry their own callsign; other sources don't --
+                # fall back to the source's label so the report stays readable.
+                callsign = label
+            analysis = analyze_log(df, callsign, label)
             analyses.append(analysis)
-            print(f"Loaded {basename}: {analysis['total_qsos']} QSOs")
+            print(f"Loaded {label}: {analysis['total_qsos']} QSOs")
         except Exception as e:
-            print(f"Error processing {filename}: {e}")
-    
+            print(f"Error processing {source}: {e}")
+
     if len(analyses) < 2:
         print("Error: Need at least 2 valid log files for comparison")
         sys.exit(1)

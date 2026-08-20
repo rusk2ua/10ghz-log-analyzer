@@ -1,63 +1,11 @@
 #!/usr/bin/env python3
 
-import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
-import sys
-import os
 from datetime import datetime, timedelta
 import math
-from io import StringIO
-import requests
 
-def get_sheet_data(sheet_url):
-    """Convert Google Sheets URL to CSV export URL and fetch data"""
-    sheet_id = sheet_url.split('/d/')[1].split('/')[0]
-    csv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv"
-    response = requests.get(csv_url)
-    return pd.read_csv(StringIO(response.text))
-
-def parse_cabrillo_file(filename):
-    """Parse Cabrillo log file and return DataFrame and callsign"""
-    qsos = []
-    callsign = None
-    
-    with open(filename, 'r') as f:
-        for line in f:
-            line = line.strip()
-            if line.startswith('CALLSIGN:'):
-                callsign = line.split(':',1)[1].strip().upper()
-            elif line.startswith('QSO:'):
-                parts = line.split()
-                if len(parts) >= 8:
-                    if callsign is None:
-                        callsign = parts[5].upper()
-                    qsos.append({
-                        'date': parts[3],
-                        'band': parts[1],
-                        'sourcegrid': parts[6],
-                        'time': parts[4],
-                        'call': parts[7],
-                        'grid': parts[8] if len(parts) > 8 else ''
-                    })
-    return pd.DataFrame(qsos), callsign or "UNKNOWN"
-
-def get_data_source():
-    """Determine data source and load data. Returns (DataFrame, callsign)."""
-    if len(sys.argv) > 1:
-        filename = sys.argv[1]
-        if os.path.exists(filename) and filename.lower().endswith('.log'):
-            return parse_cabrillo_file(filename)
-    
-    cabrillo_files = [f for f in os.listdir('.') if f.endswith('.log')]
-    if cabrillo_files:
-        return parse_cabrillo_file(cabrillo_files[0])
-    
-    sheet_url = "https://docs.google.com/spreadsheets/d/1UFbxzWJBpPdUEkfLhNA6csKbHaNypDmGeWpaeP-bQyA/edit?usp=sharing"
-    df = get_sheet_data(sheet_url)
-    contact_data = df.iloc[2:].copy()
-    contact_data.columns = ['date', 'band', 'sourcegrid', 'time', 'call', 'grid']
-    return contact_data, "UNKNOWN"
+from data_source import load_source_or_exit, build_arg_parser
 
 def grid_to_latlon(grid):
     """Convert 6-digit Maidenhead grid to lat/lon"""
@@ -291,9 +239,15 @@ def create_polar_plot(day_data, day_name):
     return fig
 
 def main():
+    parser = build_arg_parser(
+        "Generate polar (radar) plots of directional contest activity from "
+        "a Cabrillo log, a raw QSO CSV, or a Google Sheets share URL."
+    )
+    args = parser.parse_args()
+
     # Get data
-    contact_data, callsign = get_data_source()
-    
+    contact_data, callsign = load_source_or_exit(args.source)
+
     # Forward fill empty cells
     contact_data = contact_data.ffill()
     
