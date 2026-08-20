@@ -8,7 +8,7 @@ from data_source import (
     normalize_band, band_multiplier, band_to_cabrillo, BAND_ORDER,
 )
 
-VERSION = "1.5.1"
+VERSION = "1.5.2"
 
 def grid_to_latlon(grid):
     """Convert 6-digit Maidenhead grid to lat/lon"""
@@ -41,12 +41,31 @@ def calculate_distance(grid1, grid2):
     a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
     return 6371 * 2 * math.asin(math.sqrt(a))
 
+def get_contest_year(df):
+    """Determine the contest year from the QSO dates in df (the most common
+    year among them), falling back to the current year if none parse."""
+    from collections import Counter
+    years = []
+    for date_str in df['date'].dropna().unique():
+        date_str = str(date_str)
+        try:
+            if '/' in date_str:
+                date_obj = datetime.strptime(date_str, '%m/%d/%Y')
+            else:
+                date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+            years.append(date_obj.year)
+        except ValueError:
+            continue
+    if not years:
+        return datetime.now().year
+    return Counter(years).most_common(1)[0][0]
+
 def generate_summary(df, header_info, total_score):
     """Generate plain-text summary matching the screenshot format"""
     lines = []
-    
+
     # Header
-    lines.append("ARRL 10 GHz and Up Contest, 2025")
+    lines.append(f"ARRL 10 GHz and Up Contest, {get_contest_year(df)}")
     lines.append(f"Call\t\t{header_info['callsign']}")
     lines.append(f"Class\t\t{header_info['category_operator'].replace('-', ' ').title()}")
     lines.append(f"Score\t\t{total_score}")

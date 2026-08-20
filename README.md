@@ -13,7 +13,10 @@ Python script to convert Google Sheets contest logs to Cabrillo format for the A
 
 ## Version
 
-Current version: **v1.5.1**
+Current version: **v1.5.2**
+
+## New in v1.5.2
+- Fixed the summary header hardcoded to "ARRL 10 GHz and Up Contest, 2025" -- it now derives the contest year from the QSO dates in the source log, same as the dynamic contest-date detection already used elsewhere
 
 ## New in v1.5.1
 - Fixed 78 GHz (and other bands whose Cabrillo code doesn't literally contain their name, e.g. "75G") disappearing from `station_report.py`, `weekend_analysis.py`, `comprehensive_analysis.py`, and `directional_visualization.py` when analyzing a Cabrillo log -- band matching is now a single canonical lookup in `data_source.py` (`normalize_band`/`band_to_cabrillo`/`band_multiplier`) instead of five slightly-different copies scattered across scripts, several of which didn't recognize Cabrillo band codes at all
