@@ -8,7 +8,7 @@ from data_source import (
     normalize_band, band_multiplier, band_to_cabrillo, BAND_ORDER,
 )
 
-VERSION = "1.5.2"
+VERSION = "1.5.3"
 
 def grid_to_latlon(grid):
     """Convert 6-digit Maidenhead grid to lat/lon"""
@@ -216,8 +216,7 @@ def generate_cabrillo(df, header_info):
     lines.append(f"CATEGORY-BAND: {header_info['category_band'].upper()}")
     lines.append(f"CATEGORY-OPERATOR: {header_info['category_operator'].upper()}")
     lines.append(f"CATEGORY-MODE: {header_info['category_mode'].upper()}")
-    lines.append(f"CATEGORY-POWER: {header_info['category_power'].upper()}")
-    
+
     score = header_info['claimed_score'] if header_info['claimed_score'] else calculate_score(df)
     lines.append(f"CLAIMED-SCORE: {score}")
     lines.append(f"CREATED-BY: K2UA Python Logger v{VERSION}")
@@ -248,47 +247,33 @@ def generate_cabrillo(df, header_info):
     return '\n'.join(lines)
 
 def get_user_input():
-    """Get required Cabrillo header information from user"""
+    """Get required Cabrillo header information from user.
+
+    This contest has only one operator category (single operator) and one
+    mode category (mixed) -- there's no high/low power distinction either --
+    so those aren't real choices and aren't prompted for; they're set here
+    as fixed values instead. The only things that actually vary are the
+    callsign and the band category (10 GHz only, or all bands)."""
     print("\n=== ARRL 10 GHz and Up Contest - Cabrillo Header Information ===\n")
-    
+
     callsign = input("Your callsign (e.g., W1ABC): ").strip().upper()
     contest = "ARRL-10-GHZ"
-    
-    print("\nOperator Category:")
-    print("  SINGLE-OP = Single operator")
-    print("  MULTI-OP  = Multiple operators")
-    category_operator = input("Enter SINGLE-OP or MULTI-OP: ").strip().upper()
-    
+
     print("\nBand Category:")
-    print("  10G  = 10 GHz only")
-    print("  24G  = 24 GHz only") 
-    print("  47G  = 47 GHz only")
-    print("  75G  = 75+ GHz only")
-    print("  119G = 119 GHz only")
-    print("  142G = 142 GHz only")
-    print("  241G = 241 GHz only")
-    print("  ALL  = All bands")
-    category_band = input("Enter band category: ").strip().upper()
-    
-    print("\nPower Category:")
-    print("  LOW  = Low power")
-    print("  HIGH = High power")
-    category_power = input("Enter LOW or HIGH: ").strip().upper()
-    
-    print("\nMode Category:")
-    print("  CW    = CW only")
-    print("  FM    = FM only")
-    print("  MIXED = Multiple modes")
-    category_mode = input("Enter CW, FM, or MIXED: ").strip().upper()
-    
-    claimed_score = input("\nClaimed score (press Enter to auto-calculate): ").strip()
-    
+    print("  10G = 10 GHz only")
+    print("  ALL = All bands")
+    category_band = input("Enter band category (10G or ALL): ").strip().upper()
+
+    # Fixed for this contest -- not prompted for.
+    category_operator = 'SINGLE-OP'
+    category_mode = 'MIXED'
+    claimed_score = ''
+
     return {
         'callsign': callsign,
         'contest': contest,
         'category_operator': category_operator,
         'category_band': category_band,
-        'category_power': category_power,
         'category_mode': category_mode,
         'claimed_score': claimed_score
     }

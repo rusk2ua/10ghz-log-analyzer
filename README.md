@@ -13,7 +13,12 @@ Python script to convert Google Sheets contest logs to Cabrillo format for the A
 
 ## Version
 
-Current version: **v1.5.2**
+Current version: **v1.5.3**
+
+## New in v1.5.3
+- `arrl_10ghz_cabrillo.py` no longer prompts for Operator Category, Power Category, or Mode Category -- this contest only has one option for each (single operator, no power distinction, mixed mode), so asking wasn't a real choice. The interactive prompts are now just Call and Band Category
+- Band Category prompt is trimmed to the two choices that actually apply to this contest: `10G` (10 GHz only) and `ALL` (all bands)
+- The generated Cabrillo header always includes `CATEGORY-OPERATOR: SINGLE-OP` and `CATEGORY-MODE: MIXED`; the `CATEGORY-POWER:` line is no longer generated at all, since there's no power category in this contest
 
 ## New in v1.5.2
 - Fixed the summary header hardcoded to "ARRL 10 GHz and Up Contest, 2025" -- it now derives the contest year from the QSO dates in the source log, same as the dynamic contest-date detection already used elsewhere
