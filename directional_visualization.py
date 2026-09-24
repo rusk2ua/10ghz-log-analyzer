@@ -222,15 +222,71 @@ def create_polar_plot(day_data, day_name):
     plt.tight_layout()
     return fig
 
+def resolve_callsign(callsign):
+    """Use the call sign from the Cabrillo log when known, otherwise prompt
+    for it (CSV and Google Sheets sources don't carry one)."""
+    if callsign and callsign != "UNKNOWN":
+        return callsign
+    try:
+        entered = input("Operator call sign (not found in source): ").strip().upper()
+    except EOFError:
+        entered = ""
+    return entered or "UNKNOWN"
+
+def format_grid(grid):
+    """Format a Maidenhead grid in standard case (e.g. FN32kp), or return
+    None if it isn't a valid 4- or 6-character grid."""
+    grid = str(grid).strip()
+    if len(grid) not in (4, 6):
+        return None
+    if not (grid[:2].isalpha() and grid[2:4].isdigit() and (len(grid) == 4 or grid[4:].isalpha())):
+        return None
+    return grid[:2].upper() + grid[2:4] + grid[4:].lower()
+
+def create_location_plots(contact_data, callsign):
+    """One polar plot per operating location (sourcegrid) per date."""
+    data = contact_data[contact_data['datetime'].notna()].copy()
+    data['op_grid'] = data['sourcegrid'].apply(format_grid)
+    data['op_date'] = data['datetime'].apply(lambda dt: dt.strftime('%Y-%m-%d'))
+
+    bad_grid = data['op_grid'].isna().sum()
+    if bad_grid:
+        print(f"Warning: {bad_grid} QSO(s) have a missing/invalid operating grid and were skipped.")
+    data = data[data['op_grid'].notna()]
+
+    short = sorted(data.loc[data['op_grid'].str.len() < 6, 'op_grid'].unique())
+    if short:
+        print(f"Note: operating grid(s) {', '.join(short)} are only 4 characters; "
+              f"filenames use them as-is.")
+
+    count = 0
+    for (grid, date), loc_data in data.groupby(['op_grid', 'op_date']):
+        fig = create_polar_plot(loc_data, f"{callsign} from {grid} - {date}")
+        filename = f"{callsign}_{grid}_direction_analysis_{date}.png"
+        fig.savefig(filename, dpi=300, bbox_inches='tight')
+        print(f"Saved: {filename}")
+        plt.close(fig)
+        count += 1
+
+    print(f"\nGenerated {count} location-based directional analysis plot(s)")
+
 def main():
     parser = build_arg_parser(
         "Generate polar (radar) plots of directional contest activity from "
         "a Cabrillo log, a raw QSO CSV, or a Google Sheets share URL."
     )
+    parser.add_argument(
+        '-location-based', '--location-based', dest='location_based',
+        action='store_true',
+        help="Generate one plot per operating location (6-digit grid) per "
+             "date instead of one per contest day, named "
+             "{CALL}_{GRID}_direction_analysis_{YYYY-MM-DD}.png"
+    )
     args = parser.parse_args()
 
     # Get data
     contact_data, callsign = load_source_or_exit(args.source)
+    callsign = resolve_callsign(callsign)
 
     # Determine contest dates dynamically from the data
     contest_dates = determine_contest_dates(contact_data)
@@ -257,6 +313,10 @@ def main():
     unknown_dir = (contact_data['direction'] == 'Unknown').sum()
     if unknown_dir:
         print(f"Warning: {unknown_dir} QSO(s) have a missing/invalid grid and won't appear on the plots.")
+
+    if args.location_based:
+        create_location_plots(contact_data, callsign)
+        return
 
     # Get last date for filename
     last_date = max(contact_data['date'].unique())

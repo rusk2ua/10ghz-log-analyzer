@@ -13,7 +13,11 @@ Python script to convert Google Sheets contest logs to Cabrillo format for the A
 
 ## Version
 
-Current version: **v1.5.4**
+Current version: **v1.6.0**
+
+## New in v1.6.0
+- `directional_visualization.py` has a new `-location-based` (or `--location-based`) switch that generates one polar plot per operating location (6-digit grid) per date, instead of one per contest day. Files are named `{CALLSIGN}_{GRID}_direction_analysis_{YYYY-MM-DD}.png`, e.g. `K2UA_FN32kp_direction_analysis_2026-09-20.png`
+- `directional_visualization.py` now uses the call sign from the Cabrillo `CALLSIGN:` header when available, and otherwise prompts for it (CSV and Google Sheets sources don't carry one) instead of naming files `UNKNOWN_...`
 
 ## New in v1.5.4
 - Fixed `directional_visualization.py` generating no plots ("Generated directional analysis plots for 0 contest days") when the source was a raw QSO CSV or a Google Sheets URL -- pandas read the `time` column as a number (`0930` became `930`, or `1005.0` when the column had blank cells), which the script couldn't parse, so every QSO was silently discarded. `data_source.py` now normalizes `time` to a 4-digit `HHMM` string for every script
@@ -125,6 +129,7 @@ format.
 - `{CALLSIGN}_Comprehensive_Analysis_{DATE}.txt` - Complete contest analysis
 - `Log_Comparison_{CALLS}.txt` - Multi-log comparison analysis
 - `{CALLSIGN}_Directional_Analysis_Day_{N}_{DATE}.png` - Polar plot of directional activity per contest day
+- `{CALLSIGN}_{GRID}_direction_analysis_{YYYY-MM-DD}.png` - Polar plot of directional activity per operating location per date (with `-location-based`)
 
 ## Analysis Scripts
 
@@ -162,7 +167,14 @@ python directional_visualization.py logs/mylog.log
 
 # Or let it auto-detect a .log file (current directory, then logs/)
 python directional_visualization.py
+
+# One plot per operating location (6-digit grid) per date instead of per contest day
+python directional_visualization.py logs/mylog.log -location-based
 ```
+
+If the source is a CSV or Google Sheets URL (which don't include your call sign),
+the script prompts for your call sign so it can name the output files. Cabrillo
+logs use the `CALLSIGN:` header automatically.
 
 This script produces polar (radar) plots that visualize your contest activity by compass bearing and band. One PNG image is generated per contest day, saved as `{CALLSIGN}_Directional_Analysis_Day_{N}_{DATE}.png`.
 
@@ -173,6 +185,16 @@ Each plot shows:
 - **Filled regions** beneath each trace to highlight directional concentration at a glance.
 - **A legend** listing each active band along with its total points for the day.
 - **Summary statistics** in the lower-left corner: total QSOs, total points, and best DX distance for the day.
+
+#### Location-based mode (`-location-based`)
+
+Rovers and multi-site operators can instead get one plot per operating location per date. Each plot
+covers only the QSOs made from that 6-digit grid (the `sourcegrid` column, or the sent grid in a
+Cabrillo QSO line) on that date. If you operated from the same grid on two different dates, you get
+two plots. Files are named `{CALLSIGN}_{GRID}_direction_analysis_{YYYY-MM-DD}.png` with the grid in
+standard Maidenhead case, e.g. `K2UA_FN32kp_direction_analysis_2026-09-20.png`. In this mode the
+per-contest-day plots are not generated. QSOs with a missing or invalid operating grid are skipped
+with a warning; a 4-character operating grid is used in the filename as-is.
 
 The plots are useful for:
 
