@@ -239,7 +239,7 @@ def format_grid(grid):
     grid = str(grid).strip()
     if len(grid) not in (4, 6):
         return None
-    if not (grid[:2].isalpha() and grid[2:4].isdigit() and grid[4:].isalpha()):
+    if not (grid[:2].isalpha() and grid[2:4].isdigit() and (len(grid) == 4 or grid[4:].isalpha())):
         return None
     return grid[:2].upper() + grid[2:4] + grid[4:].lower()
 
