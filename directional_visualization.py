@@ -47,6 +47,9 @@ def calculate_bearing(grid1, grid2):
     lat1, lon1 = grid_to_latlon(grid1)
     lat2, lon2 = grid_to_latlon(grid2)
     
+    if None in [lat1, lon1, lat2, lon2]:
+        return None
+    
     lat1, lon1, lat2, lon2 = map(math.radians, [lat1, lon1, lat2, lon2])
     dlon = lon2 - lon1
     
@@ -59,6 +62,8 @@ def calculate_bearing(grid1, grid2):
 
 def get_direction(bearing):
     """Convert bearing to compass direction"""
+    if bearing is None or bearing != bearing:  # missing/invalid grid (None or NaN)
+        return 'Unknown'
     directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 
                  'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW']
     idx = round(bearing / 22.5) % 16
@@ -67,6 +72,7 @@ def get_direction(bearing):
 def parse_datetime(date_str, time_str):
     """Parse date and time strings into datetime object"""
     try:
+        date_str = str(date_str)
         if '/' in date_str:
             date_parts = date_str.split('/')
             if len(date_parts[2]) == 4:
@@ -75,7 +81,8 @@ def parse_datetime(date_str, time_str):
                 date_obj = datetime.strptime(date_str, '%m/%d/%y')
         else:
             date_obj = datetime.strptime(date_str, '%Y-%m-%d')
-        
+
+        time_str = str(time_str).zfill(4)
         hour = int(time_str[:2])
         minute = int(time_str[2:])
         
@@ -240,7 +247,17 @@ def main():
     # Group by contest days - extract just the day number for grouping
     contact_data['day_number'] = contact_data['contest_day'].str.extract(r'Day (\d+)')[0]
     contest_days = contact_data[contact_data['day_number'].notna()].groupby('day_number')
-    
+
+    if len(contest_days) == 0:
+        print("\nNo plots generated: none of the QSOs had a date/time that could be parsed.")
+        print("Check that the date column is YYYY-MM-DD or MM/DD/YYYY and time is HHMM.")
+        print(contact_data[['date', 'time', 'call']].head().to_string(index=False))
+        return
+
+    unknown_dir = (contact_data['direction'] == 'Unknown').sum()
+    if unknown_dir:
+        print(f"Warning: {unknown_dir} QSO(s) have a missing/invalid grid and won't appear on the plots.")
+
     # Get last date for filename
     last_date = max(contact_data['date'].unique())
     if '/' in str(last_date):
