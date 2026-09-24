@@ -17,7 +17,13 @@ Current version: **v1.6.0**
 
 ## New in v1.6.0
 - `directional_visualization.py` has a new `-location-based` (or `--location-based`) switch that generates one polar plot per operating location (6-digit grid) per date, instead of one per contest day. Files are named `{CALLSIGN}_{GRID}_direction_analysis_{YYYY-MM-DD}.png`, e.g. `K2UA_FN32kp_direction_analysis_2026-09-20.png`
-- `directional_visualization.py` now uses the call sign from the Cabrillo `CALLSIGN:` header when available, and otherwise prompts for it (CSV and Google Sheets sources don't carry one) instead of naming files `UNKNOWN_...`
+  - A grid operated from on more than one date gets a separate plot for each date
+  - With the switch, only the location-based plots are generated; without it, the per-contest-day plots are unchanged
+  - Grids are written in standard Maidenhead case (`FN32kp`) regardless of how they were entered in the log
+  - Each plot is titled with the call sign, grid and date (e.g. "K2UA from FN32kp - 2026-09-20"), and its summary box covers only that location and date
+  - QSOs with a missing or invalid operating grid are skipped with a warning; a 4-character operating grid is accepted and used in the filename as-is
+- `directional_visualization.py` now uses the call sign from the Cabrillo `CALLSIGN:` header when available, and otherwise prompts for it (CSV and Google Sheets sources don't carry one) instead of naming files `UNKNOWN_...`. If the prompt is left blank or the script runs non-interactively, it falls back to `UNKNOWN`
+- `.gitignore` now excludes the new `*_direction_analysis_*.png` output files
 
 ## New in v1.5.4
 - Fixed `directional_visualization.py` generating no plots ("Generated directional analysis plots for 0 contest days") when the source was a raw QSO CSV or a Google Sheets URL -- pandas read the `time` column as a number (`0930` became `930`, or `1005.0` when the column had blank cells), which the script couldn't parse, so every QSO was silently discarded. `data_source.py` now normalizes `time` to a 4-digit `HHMM` string for every script
