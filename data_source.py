@@ -82,7 +82,12 @@ _BAND_LOOKUP = _build_band_lookup()
 
 
 def _band_key(band):
-    return str(band).strip().lower().replace(' ', '')
+    key = str(band).strip().lower().replace(' ', '')
+    # A bare-number band column read by pandas with blank cells becomes
+    # float ("10.0", "24.0") -- treat those like the bare number.
+    if key.endswith('.0'):
+        key = key[:-2]
+    return key
 
 
 def normalize_band(band):
@@ -104,6 +109,23 @@ def band_multiplier(band):
     """Points-per-km scoring multiplier for a band."""
     hit = _BAND_LOOKUP.get(_band_key(band))
     return hit[2] if hit else 1
+
+
+def normalize_time(value):
+    """Zero-padded 4-digit HHMM string for a QSO time.
+
+    pandas reads a time column like 0930 as the integer 930, and when the
+    column has any blank cells (e.g. a Google Sheets export before
+    forward-fill) as a float like 1005.0. Every script expects 'HHMM', so
+    normalize here once. Also accepts 'HH:MM'. Unparseable values are
+    returned unchanged.
+    """
+    if value is None or (isinstance(value, float) and value != value):
+        return value
+    text = str(value).strip().replace(':', '')
+    if text.endswith('.0'):
+        text = text[:-2]
+    return text.zfill(4) if text.isdigit() and len(text) <= 4 else text
 
 SOURCE_HELP = (
     "Path to a local Cabrillo .log file, a local raw QSO .csv file (drop one "
@@ -212,6 +234,8 @@ def _fill_and_clean(df):
     if 'call' in df.columns:
         df = df.dropna(subset=['call'])
         df = df[df['call'].astype(str).str.strip() != '']
+    if 'time' in df.columns:
+        df['time'] = df['time'].apply(normalize_time)
     if 'band' in df.columns:
         # Normalize once, here, so every script downstream sees the same
         # canonical band name regardless of whether it came from a bare

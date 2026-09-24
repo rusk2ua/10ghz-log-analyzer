@@ -13,7 +13,14 @@ Python script to convert Google Sheets contest logs to Cabrillo format for the A
 
 ## Version
 
-Current version: **v1.5.3**
+Current version: **v1.5.4**
+
+## New in v1.5.4
+- Fixed `directional_visualization.py` generating no plots ("Generated directional analysis plots for 0 contest days") when the source was a raw QSO CSV or a Google Sheets URL -- pandas read the `time` column as a number (`0930` became `930`, or `1005.0` when the column had blank cells), which the script couldn't parse, so every QSO was silently discarded. `data_source.py` now normalizes `time` to a 4-digit `HHMM` string for every script
+- Fixed a bare-number band column (`10`, `24`, ...) being read as `10.0`/`24.0` when the column has blank cells, which the band lookup didn't recognize -- this scored every band at 1x and wrote `10.0` instead of `10G` as the Cabrillo band code
+- `directional_visualization.py` no longer crashes with a `TypeError` when a QSO has a missing or invalid grid; it warns and leaves that QSO off the plot
+- `directional_visualization.py` now explains why when it can't generate any plots, instead of exiting silently
+- Added `requirements.txt` (including `numpy`, which the directional script imports directly)
 
 ## New in v1.5.3
 - `arrl_10ghz_cabrillo.py` no longer prompts for Operator Category, Power Category, or Mode Category -- this contest only has one option for each (single operator, no power distinction, mixed mode), so asking wasn't a real choice. The interactive prompts are now just Call and Band Category
@@ -70,7 +77,7 @@ Current version: **v1.5.3**
 ```bash
 python3 -m venv venv
 source venv/bin/activate
-pip install pandas requests matplotlib
+pip install -r requirements.txt
 ```
 
 2. Drop your own log into `logs/` (or point at a Google Sheets URL -- see
@@ -185,5 +192,8 @@ The plots are useful for:
 
 - Python 3.x
 - pandas
+- numpy (installed with pandas; also used directly by the directional visualization)
 - requests
 - matplotlib (for directional analysis visualization)
+
+Install everything with `pip install -r requirements.txt`.
