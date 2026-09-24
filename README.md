@@ -1,4 +1,4 @@
-# ARRL 10 GHz and Up Contest Logger
+# ARRL 10 GHz and Up Contest Log Analyzer
 
 Python script to convert Google Sheets contest logs to Cabrillo format for the ARRL 10 GHz and Up Contest.
 
