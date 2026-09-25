@@ -13,7 +13,10 @@ Python script to convert Google Sheets contest logs to Cabrillo format for the A
 
 ## Version
 
-Current version: **v1.6.0**
+Current version: **v1.6.1**
+
+## New in v1.6.1
+- Fixed the band multipliers for 142 GHz and up. They scored 142 GHz at 6x and 241 GHz and 300 GHz at 10x, but the ARRL 10 GHz and Up rules (section 5.2) give every band from 122 GHz up a multiplier of 5. This changed the actual claimed score in the Cabrillo `CLAIMED-SCORE:` line, the summary, the weekend analysis and the directional plots for any log with QSOs on those bands. Logs on 10 through 122 GHz only are unaffected
 
 ## New in v1.6.0
 - `directional_visualization.py` has a new `-location-based` (or `--location-based`) switch that generates one polar plot per operating location (6-digit grid) per date, instead of one per contest day. Files are named `{CALLSIGN}_{GRID}_direction_analysis_{YYYY-MM-DD}.png`, e.g. `K2UA_FN32kp_direction_analysis_2026-09-20.png`
@@ -212,7 +215,7 @@ The plots are useful for:
 ## Scoring Rules
 
 - Distance points: Ceiling of km distance × band multiplier
-- Band multipliers: 10 GHz=1x, 24 GHz=2x, 47 GHz=3x, 78 GHz=4x, 122 GHz=5x
+- Band multipliers (ARRL rules 5.2): 10 GHz=1x, 24 GHz=2x, 47 GHz=3x, 75 GHz (78 GHz)=4x, 122 GHz and up (122, 142, 241, 300 GHz)=5x
 - Bonus points: 100 points per unique callsign per band
 - Minimum distance: 1 km per QSO
 
