@@ -13,7 +13,10 @@ Python script to convert Google Sheets contest logs to Cabrillo format for the A
 
 ## Version
 
-Current version: **v1.6.2**
+Current version: **v1.6.3**
+
+## New in v1.6.3
+- Fixed the Cabrillo `CREATED-BY:` line reporting an old version. `arrl_10ghz_cabrillo.py` had its own `VERSION` constant that was still `1.5.3`, so every generated log said `K2UA Python Logger v1.5.3` regardless of the release. It now matches the release version (`v1.6.3`)
 
 ## New in v1.6.2
 - Fixed a band that doesn't exist: the analyzer listed a "142 GHz" band (Cabrillo `142G`). The actual amateur allocation is 134 GHz (Cabrillo `134G`), so the band is now "134 GHz" everywhere, and Cabrillo output writes `134G`. Logs that still say `142` are mapped to 134 GHz so they keep scoring correctly. Multiplier is unchanged (5x)
