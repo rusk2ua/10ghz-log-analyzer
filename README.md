@@ -13,10 +13,13 @@ Python script to convert Google Sheets contest logs to Cabrillo format for the A
 
 ## Version
 
-Current version: **v1.6.1**
+Current version: **v1.6.2**
+
+## New in v1.6.2
+- Fixed a band that doesn't exist: the analyzer listed a "142 GHz" band (Cabrillo `142G`). The actual amateur allocation is 134 GHz (Cabrillo `134G`), so the band is now "134 GHz" everywhere, and Cabrillo output writes `134G`. Logs that still say `142` are mapped to 134 GHz so they keep scoring correctly. Multiplier is unchanged (5x)
 
 ## New in v1.6.1
-- Fixed the band multipliers for 142 GHz and up. They scored 142 GHz at 6x and 241 GHz and 300 GHz at 10x, but the ARRL 10 GHz and Up rules (section 5.2) give every band from 122 GHz up a multiplier of 5. This changed the actual claimed score in the Cabrillo `CLAIMED-SCORE:` line, the summary, the weekend analysis and the directional plots for any log with QSOs on those bands. Logs on 10 through 122 GHz only are unaffected
+- Fixed the band multipliers for the bands above 122 GHz. They scored 142 GHz (now 134 GHz, see v1.6.2) at 6x and 241 GHz and 300 GHz at 10x, but the ARRL 10 GHz and Up rules (section 5.2) give every band from 122 GHz up a multiplier of 5. This changed the actual claimed score in the Cabrillo `CLAIMED-SCORE:` line, the summary, the weekend analysis and the directional plots for any log with QSOs on those bands. Logs on 10 through 122 GHz only are unaffected
 
 ## New in v1.6.0
 - `directional_visualization.py` has a new `-location-based` (or `--location-based`) switch that generates one polar plot per operating location (6-digit grid) per date, instead of one per contest day. Files are named `{CALLSIGN}_{GRID}_direction_analysis_{YYYY-MM-DD}.png`, e.g. `K2UA_FN32kp_direction_analysis_2026-09-20.png`
@@ -215,7 +218,7 @@ The plots are useful for:
 ## Scoring Rules
 
 - Distance points: Ceiling of km distance × band multiplier
-- Band multipliers (ARRL rules 5.2): 10 GHz=1x, 24 GHz=2x, 47 GHz=3x, 75 GHz (78 GHz)=4x, 122 GHz and up (122, 142, 241, 300 GHz)=5x
+- Band multipliers (ARRL rules 5.2): 10 GHz=1x, 24 GHz=2x, 47 GHz=3x, 75 GHz (78 GHz)=4x, 122 GHz and up (122, 134, 241, 300 GHz)=5x
 - Bonus points: 100 points per unique callsign per band
 - Minimum distance: 1 km per QSO
 
