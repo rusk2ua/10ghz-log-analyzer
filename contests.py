@@ -227,7 +227,7 @@ def category_from_header(header, callsign=''):
         return 'LM'
     if 'multi' in hq or operator == 'MULTI-OP':
         return 'UM'
-    if is_rover_call(callsign or header.get('CALLSIGN', '')):
+    if not station and is_rover_call(callsign or header.get('CALLSIGN', '')):
         return 'R'
     return 'SO'
 
@@ -261,7 +261,8 @@ def score_vhf(df, contest_id, category='SO', analog_only=False):
     - Multipliers: grid squares worked on each band (5.3).
     - Rovers add one multiplier per grid they made a contact from (5.4.2).
     - Category band limits (SO3B, SOFM, Limited Rover) and mode limits
-      (SOFM: FM only; Analog Only: no digital modes).
+      (SOFM: FM only; Analog Only: no digital modes). A QSO with no mode
+      logged isn't dropped by a mode limit.
     - QSOs outside the contest weekend, below 50 MHz, without a 4-character
       grid, or with an aeronautical mobile (/AM) don't count.
 
@@ -288,6 +289,8 @@ def score_vhf(df, contest_id, category='SO', analog_only=False):
         my_grid = str(row.sourcegrid).strip().upper()[:4]
         grid = str(row.grid).strip().upper()[:4]
         mode = str(getattr(row, 'mode', '') or '').strip().upper() if has_mode else ''
+        if mode == 'NAN':
+            mode = ''
         when = parse_qso_datetime(row.date, row.time)
 
         reason = None
@@ -301,9 +304,9 @@ def score_vhf(df, contest_id, category='SO', analog_only=False):
             reason = "missing or invalid grid square"
         elif call.endswith('/AM'):
             reason = "aeronautical mobile contacts don't count"
-        elif category == 'SOFM' and has_mode and mode not in FM_MODES:
+        elif category == 'SOFM' and mode and mode not in FM_MODES:
             reason = f"{mode or 'unknown'} mode doesn't count for {name}"
-        elif analog_only and has_mode and mode not in ANALOG_MODES:
+        elif analog_only and mode and mode not in ANALOG_MODES:
             reason = f"{mode or 'unknown'} mode doesn't count for Analog Only"
         if reason:
             excluded.append((index, reason))

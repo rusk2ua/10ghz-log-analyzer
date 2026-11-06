@@ -50,12 +50,12 @@ _CATEGORY_HEADER = {
 }
 
 
-def cabrillo_mode(mode):
+def cabrillo_mode(mode, default='PH'):
     """Cabrillo QSO-line mode for a logged mode (FT8, Q65, MSK144, ... are
-    DG). A log without modes (a spreadsheet CSV) is written as PH."""
+    DG). A QSO without a mode is written as `default`."""
     mode = str(mode or '').strip().upper()
     if not mode or mode == 'NAN':
-        return 'PH'
+        return default
     return _CABRILLO_MODES.get(mode, 'DG')
 
 
@@ -83,21 +83,35 @@ def _qso_date(value):
     return text
 
 
-def generate_cabrillo(df, callsign, contest_id, category, header, score):
+def generate_cabrillo(df, callsign, contest_id, category, header, score, analog_only=False):
+    """Cabrillo log. Header lines from a Cabrillo source log are carried
+    over, except that the lines naming the entry category always match the
+    category being scored -- grid-mapper's contest movie reads them back to
+    score the same way. Analog Only is written as X-ANALOG-ONLY: YES."""
     lines = ["START-OF-LOG: 3.0", f"CONTEST: {contest_id}", f"CALLSIGN: {callsign}"]
-    fields = OrderedDict(_CATEGORY_HEADER.get(category, {}))
-    fields.setdefault('CATEGORY-BAND', 'ALL')
-    fields.setdefault('CATEGORY-MODE', 'MIXED')
+    fields = OrderedDict()
     for tag in _CARRIED_HEADER:
         if header.get(tag):
             fields[tag] = header[tag]
+    fields.setdefault('CATEGORY-BAND', 'ALL')
+    fields.setdefault('CATEGORY-MODE', 'MIXED')
+    if category in ('SO3B', 'SOFM', 'LM', 'UM') or fields['CATEGORY-BAND'] in ('3-BAND', 'FM', 'LIMITED'):
+        fields['CATEGORY-BAND'] = 'ALL'
+    if category != 'SOFM' and fields['CATEGORY-MODE'] == 'FM':
+        fields['CATEGORY-MODE'] = 'MIXED'
+    fields.update(_CATEGORY_HEADER.get(category, {}))
     for tag, value in fields.items():
         lines.append(f"{tag}: {value}")
+    if analog_only:
+        lines.append("X-ANALOG-ONLY: YES")
     lines.append(f"CLAIMED-SCORE: {score}")
     lines.append(f"CREATED-BY: K2UA Python Logger v{VERSION}")
     has_mode = 'mode' in df.columns
+    # A QSO without a mode (every QSO in a spreadsheet CSV) is written as PH
+    # -- or FM for an FM-Only entry -- so it still counts when re-read.
+    default_mode = 'FM' if category == 'SOFM' else 'PH'
     for row in df.itertuples(index=False):
-        mode = cabrillo_mode(getattr(row, 'mode', '') if has_mode else '')
+        mode = cabrillo_mode(getattr(row, 'mode', '') if has_mode else '', default_mode)
         lines.append(
             f"QSO: {band_to_cabrillo(row.band)} {mode} {_qso_date(row.date)} "
             f"{str(row.time).zfill(4)[:4]} {callsign} {str(row.sourcegrid).upper()[:6]} "
@@ -215,7 +229,8 @@ def main():
 
     stem = f"{file_safe_call(callsign)}_{contest.file_tag}"
     with open(f"{stem}.log", 'w') as f:
-        f.write(generate_cabrillo(df, callsign, contest_id, category, header, result['total']))
+        f.write(generate_cabrillo(df, callsign, contest_id, category, header, result['total'],
+                                  analog_only))
     with open(f"{stem}_Summary.txt", 'w') as f:
         f.write(generate_summary(df, callsign, contest_id, category, result, detection,
                                  analog_only))

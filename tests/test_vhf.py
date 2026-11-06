@@ -187,3 +187,28 @@ def test_vhf_cabrillo_script(tmp_path):
     assert 'CATEGORY-STATION: ROVER' in cabrillo
     assert cabrillo.count('\nQSO: ') == len(JUNE_ROVER)
     assert 'QSO: 222 FM 2026-06-14 0101 K2UA/R FN13 N2ZN FN13' in cabrillo
+
+
+def test_category_lines_follow_the_scored_category(tmp_path):
+    """A rover log re-scored as a fixed station gets a fixed-station header
+    (grid-mapper's movie reads it back), and Analog Only is recorded."""
+    rows = ["START-OF-LOG: 3.0", "CONTEST: ARRL-VHF-JUN", "CALLSIGN: K2UA",
+            "CATEGORY-STATION: ROVER", "CATEGORY-POWER: HIGH"]
+    rows += [f"QSO: {b} {m} {d} {t} K2UA {mg} {c} {g}" for b, m, d, t, mg, c, g in JUNE_ROVER]
+    (tmp_path / 'log.log').write_text('\n'.join(rows) + '\n')
+    subprocess.run([sys.executable, f'{ROOT}/vhf_cabrillo.py', 'log.log', '--category', 'SO3B',
+                    '--analog'], cwd=tmp_path, check=True, capture_output=True, input='', text=True)
+    cabrillo = (tmp_path / 'K2UA_ARRL_VHF_JUN.log').read_text()
+    assert 'CATEGORY-STATION: FIXED' in cabrillo and 'CATEGORY-BAND: 3-BAND' in cabrillo
+    assert 'CATEGORY-POWER: HIGH' in cabrillo and 'X-ANALOG-ONLY: YES' in cabrillo
+    assert 'ROVER' not in cabrillo
+
+
+def test_csv_fm_only_entry_is_written_as_fm(tmp_path):
+    (tmp_path / 'log.csv').write_text(
+        "date,band,sourcegrid,time,call,grid\n2026-06-13,144,FN12,1800,W2FU,FN13\n")
+    subprocess.run([sys.executable, f'{ROOT}/vhf_cabrillo.py', 'log.csv', '--category', 'SOFM'],
+                   cwd=tmp_path, check=True, capture_output=True, input='K2UA\n', text=True)
+    cabrillo = (tmp_path / 'K2UA_ARRL_VHF_JUN.log').read_text()
+    assert 'QSO: 144 FM 2026-06-13 1800 K2UA FN12 W2FU FN13' in cabrillo
+    assert 'CLAIMED-SCORE: 1' in cabrillo
