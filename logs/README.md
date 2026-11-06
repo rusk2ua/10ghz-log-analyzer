@@ -11,6 +11,8 @@ path to a file in here as its command-line argument.
   and what all the analysis scripts (`station_report.py`,
   `weekend_analysis.py`, `comprehensive_analysis.py`,
   `directional_visualization.py`, `log_comparison.py`) read directly.
+- **ADIF `.adi` files** -- exported from N1MM+, WSJT-X, LoTW or any other
+  logger.
 - **Raw QSO `.csv` files** -- an export of your working log (e.g. from
   Google Sheets: File > Download > Comma Separated Values), with columns
   `date, band, sourcegrid, time, call, grid`. Only `arrl_10ghz_cabrillo.py`
@@ -35,6 +37,10 @@ contact.
 - `sample_cabrillo.log` -- the same QSOs already converted to Cabrillo
   format, so you can try the analysis scripts immediately without running
   the converter first.
+- `sample_vhf_rover.log` and `sample_vhf_rover.adi` -- a fictional ARRL
+  June VHF Contest rover log (90 QSOs, 50 MHz-10 GHz, three grids), in
+  Cabrillo and ADIF. `vhf_cabrillo.py` scores both at 215 QSO points x 46
+  multipliers = 9,890.
 
 Try it:
 
@@ -43,6 +49,7 @@ python arrl_10ghz_cabrillo.py logs/sample_qso_log.csv
 python station_report.py logs/sample_cabrillo.log
 python comprehensive_analysis.py logs/sample_cabrillo.log
 python directional_visualization.py logs/sample_cabrillo.log
+python vhf_cabrillo.py logs/sample_vhf_rover.adi
 ```
 
 These sample files are illustrative only -- not real contest data, and

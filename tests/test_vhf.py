@@ -212,3 +212,13 @@ def test_csv_fm_only_entry_is_written_as_fm(tmp_path):
     cabrillo = (tmp_path / 'K2UA_ARRL_VHF_JUN.log').read_text()
     assert 'QSO: 144 FM 2026-06-13 1800 K2UA FN12 W2FU FN13' in cabrillo
     assert 'CLAIMED-SCORE: 1' in cabrillo
+
+
+@pytest.mark.parametrize('name', ['sample_vhf_rover.log', 'sample_vhf_rover.adi'])
+def test_sample_vhf_rover_logs(name):
+    path = os.path.join(ROOT, 'logs', name)
+    df, call = ds.resolve_source(path, verbose=False)
+    found = contests.detect_contest(df, ds.read_log_header(path))
+    assert (call, found.contest_id, len(df)) == ('K2UA/R', ARRL_VHF_JUN, 90)
+    result = contests.score_vhf(df, ARRL_VHF_JUN, 'R')
+    assert (result['qso_points'], result['multipliers'], result['total']) == (215, 46, 9890)
