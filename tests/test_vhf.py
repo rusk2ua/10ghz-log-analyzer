@@ -222,3 +222,28 @@ def test_sample_vhf_rover_logs(name):
     assert (call, found.contest_id, len(df)) == ('K2UA/R', ARRL_VHF_JUN, 90)
     result = contests.score_vhf(df, ARRL_VHF_JUN, 'R')
     assert (result['qso_points'], result['multipliers'], result['total']) == (215, 46, 9890)
+
+
+def test_unreadable_date_doesnt_count():
+    df = log([('144', 'PH', 'someday', '1800', 'FN12', 'W2FU', 'FN13')])
+    r = contests.score_vhf(df, ARRL_VHF_JUN, 'SO')
+    assert r['total'] == 0 and r['excluded'] == [(0, 'missing or unreadable date')]
+
+
+def test_adif_mfsk_with_and_without_submode(tmp_path):
+    path = tmp_path / 'ft.adi'
+    path.write_text("<EOH>\n"
+                    "<CALL:4>W2FU <QSO_DATE:8>20260613 <TIME_ON:4>1800 <BAND:2>6m <MODE:4>MFSK "
+                    "<SUBMODE:3>FT4 <GRIDSQUARE:4>FN13 <MY_GRIDSQUARE:4>FN12 <EOR>\n"
+                    "<CALL:4>N2ZN <QSO_DATE:8>20260613 <TIME_ON:4>1801 <BAND:2>6m <MODE:4>MFSK "
+                    "<GRIDSQUARE:4>FN13 <MY_GRIDSQUARE:4>FN12 <EOR>\n")
+    df, _ = ds.resolve_source(str(path), verbose=False)
+    assert list(df['mode']) == ['FT4', 'MFSK']
+
+
+def test_10ghz_duplicate_check_leaves_the_log_alone():
+    import arrl_10ghz_cabrillo
+    df = log([('10G', 'CW', '2026-08-15', '1200', 'FN12', 'W2FU', 'FN13')])
+    columns = list(df.columns)
+    arrl_10ghz_cabrillo.check_duplicates(df)
+    assert list(df.columns) == columns
