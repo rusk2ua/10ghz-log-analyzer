@@ -1,19 +1,31 @@
 # ARRL 10 GHz and Up Contest Log Analyzer
 
-Python script to convert Google Sheets contest logs to Cabrillo format for the ARRL 10 GHz and Up Contest.
+Python scripts to convert contest logs to Cabrillo format and analyze them, for the ARRL 10 GHz and Up Contest and the ARRL January, June and September VHF Contests (rovers included).
 
 ## Features
 
 - Converts Google Sheets data to proper Cabrillo format
 - Calculates contest scores with distance-based points and band multipliers
 - Supports all microwave bands (10 GHz through 300+ GHz)
+- Scores the ARRL January, June and September VHF Contests, 50 MHz and up, with full rover scoring (see [VHF Contests](#vhf-contests))
+- Detects which contest a log is from, by its `CONTEST:` header or its QSO dates
+- Reads Cabrillo, ADIF (`.adi`/`.adif`), CSV and Google Sheets logs
 - Generates both Cabrillo log files and contest summaries
 - Handles Maidenhead grid square calculations and distance computations
 - Forward-fill functionality for incomplete spreadsheet data
 
 ## Version
 
-Current version: **v1.6.3**
+Current version: **v1.7.0**
+
+## New in v1.7.0
+- **ARRL January, June and September VHF Contests.** The new `vhf_cabrillo.py` scores a log under the Jan/Jun/Sep VHF rules (v1.2) and writes `{CALLSIGN}_ARRL_VHF_JAN.log` / `_JUN` / `_SEP` and a summary. See [VHF Contests](#vhf-contests)
+- **Rovers.** Rover logs score with rule 5.4.2: QSO points x (grids worked per band + one per grid activated). A station counts once per band from each grid pair, so a rover can be worked again after either station moves. The summary lists each rover stop with its first and last QSO
+- **Contest detection.** `contests.py` identifies a log's contest from its `CONTEST:` header (or ADIF `CONTEST_ID`), else from the QSO dates: the 3rd or 4th full weekend of January, the 2nd full weekend of June and September, and the 3rd full weekends of August and September for 10 GHz and Up
+- **ADIF logs.** Every script now reads `.adi`/`.adif` files (N1MM+, WSJT-X, LoTW, ...). QSL and confirmation fields are ignored -- filter the ADIF file first if you only want confirmed contacts
+- **VHF bands.** The band table now covers 50, 144, 222, 432 and 902 MHz and 1.2, 2.3, 3.4 and 5.7 GHz, and understands ADIF band names (`2m`, `23cm`, `3cm`, `4mm`, ...) and Cabrillo frequencies in kHz. The ARRL 10 GHz and Up scorer ignores QSOs below 10 GHz (they don't count in that contest)
+- **Rover call signs in file names.** A call such as `K2UA/R` is written as `K2UA-R` in output file names; every script previously failed to save its output for a `/R` call
+- Unit tests in `tests/` (`python -m pytest tests`)
 
 ## New in v1.6.3
 - Fixed the Cabrillo `CREATED-BY:` line reporting an old version. `arrl_10ghz_cabrillo.py` had its own `VERSION` constant that was still `1.5.3`, so every generated log said `K2UA Python Logger v1.5.3` regardless of the release. It now matches the release version (`v1.6.3`)
@@ -119,6 +131,10 @@ Every script in this project takes a single optional `source` argument
 
 - **A local Cabrillo `.log` file** -- e.g. `logs/sample_cabrillo.log`, or a
   file produced by `arrl_10ghz_cabrillo.py`.
+- **A local ADIF `.adi`/`.adif` file** -- from N1MM+, WSJT-X, LoTW or any
+  other logger. Uses `CALL`, `GRIDSQUARE`, `MY_GRIDSQUARE`, `BAND` (or
+  `FREQ`), `MODE`, `QSO_DATE` and `TIME_ON`; a QSO without its own
+  `MY_GRIDSQUARE` gets the most common one in the file.
 - **A local raw QSO `.csv` file** -- e.g. `logs/sample_qso_log.csv`, shaped
   like a Google Sheets export: columns `date, band, sourcegrid, time, call,
   grid`. It's normal for `date`, `band`, and `sourcegrid` to be blank on a
@@ -139,6 +155,7 @@ format.
 
 - `{CALLSIGN}_ARRL_10GHZ.log` - Cabrillo format contest log
 - `{CALLSIGN}_ARRL_10GHZ_Summary.txt` - Contest summary with scoring breakdown
+- `{CALLSIGN}_ARRL_VHF_JAN.log` (or `_JUN`, `_SEP`) and `..._Summary.txt` - VHF contest Cabrillo log and summary, from `vhf_cabrillo.py`
 - `{CALLSIGN}_Station_Report_{DATE}.txt` - Station-by-station activity analysis
 - `{CALLSIGN}_Weekend_Analysis_{DATE}.txt` - Weekend-by-weekend breakdown
 - `{CALLSIGN}_Comprehensive_Analysis_{DATE}.txt` - Complete contest analysis
@@ -218,7 +235,38 @@ The plots are useful for:
 - Evaluating multi-day strategy — generating one plot per contest day lets you see how conditions or operating locations shifted between weekends.
 - Planning future contests by understanding which directions yield the most contacts and distance from a given grid.
 
-## Scoring Rules
+## VHF Contests
+
+```bash
+# Detect the contest and category from the log
+python vhf_cabrillo.py logs/my_june_rover.log
+
+# Or choose them: --contest JAN|JUN|SEP, --category SO|SOP|SO3B|SOFM|R|RL|RU|LM|UM
+python vhf_cabrillo.py my_log.adi --contest JAN --category R --analog
+```
+
+Scoring follows the ARRL January, June, and September VHF Contest Rules
+(version 1.2):
+
+- **QSO points:** 50 and 144 MHz 1 point; 222 and 432 MHz 2 points; 902 MHz
+  and 1.2 GHz 3 points (4 in January); 2.3 GHz and up 4 points (8 in
+  January).
+- **Multipliers:** grid squares worked on each band. Rovers add one
+  multiplier for each grid they made a contact from.
+- **Duplicates:** a station counts once per band from each grid pair.
+- **Categories:** Single Operator 3-Band counts 50/144/432 MHz only; FM-Only
+  counts FM QSOs on 50 MHz-1.2 GHz; Limited Rover counts the four lowest
+  bands; `--analog` (Analog Only) drops digital-mode QSOs.
+- QSOs outside the contest weekend, with aeronautical mobile (`/AM`)
+  stations, or without both 4-character grids aren't counted; the summary
+  lists them with the reason.
+
+The category comes from `--category`, else the log header (N1MM's
+`HQ-CATEGORY` or `CATEGORY-STATION`), else a `/R` call sign means Classic
+Rover. The score is the claimed score: ARRL's published score can be lower
+after log checking removes busted and not-in-log QSOs.
+
+## Scoring Rules (10 GHz and Up)
 
 - Distance points: Ceiling of km distance × band multiplier
 - Band multipliers (ARRL rules 5.2): 10 GHz=1x, 24 GHz=2x, 47 GHz=3x, 75 GHz (78 GHz)=4x, 122 GHz and up (122, 134, 241, 300 GHz)=5x

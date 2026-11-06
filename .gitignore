@@ -7,13 +7,19 @@ venv/
 # Sample files are explicitly whitelisted below.
 logs/*.csv
 logs/*.log
+logs/*.adi
+logs/*.adif
 !logs/sample_qso_log.csv
 !logs/sample_cabrillo.log
+!logs/sample_vhf_rover.log
+!logs/sample_vhf_rover.adi
 
 # Generated contest outputs (derived from your own personal QSO data) --
 # not tracked by default; these regenerate any time you rerun the scripts.
 *_ARRL_10GHZ.log
 *_ARRL_10GHZ_Summary.txt
+*_ARRL_VHF_*.log
+*_ARRL_VHF_*_Summary.txt
 *_Station_Report_*.txt
 *_Weekend_Analysis_*.txt
 *_Comprehensive_Analysis_*.txt
