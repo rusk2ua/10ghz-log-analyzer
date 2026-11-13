@@ -16,7 +16,11 @@ Python scripts to convert contest logs to Cabrillo format and analyze them, for 
 
 ## Version
 
-Current version: **v1.7.0**
+Current version: **v1.7.1**
+
+## New in v1.7.1
+- **CSV logs with other column names no longer lose QSOs.** A raw QSO CSV whose header used a name other than the six standard ones, such as `my_grid` for `sourcegrid`, wasn't recognized and was read as the old Google Sheets export layout, which skips two rows: the first two QSOs silently disappeared. The loader now also accepts the names grid-mapper accepts: `my_grid`/`mygrid`/`my_gridsquare`/`home_grid`/`station_grid` (your grid), `callsign` (their call), `gridsquare`/`their_grid`/`dx_grid` (their grid), `qso_date`, `qso_time`/`time_on`. Case, spaces and underscores don't matter
+- A header that names some of the columns but not all, with QSOs right below it, now stops with a message saying which column is missing, instead of guessing
 
 ## New in v1.7.0
 - **ARRL January, June and September VHF Contests.** The new `vhf_cabrillo.py` scores a log under the Jan/Jun/Sep VHF rules (v1.2) and writes `{CALLSIGN}_ARRL_VHF_JAN.log` / `_JUN` / `_SEP` and a summary. See [VHF Contests](#vhf-contests)
@@ -137,7 +141,8 @@ Every script in this project takes a single optional `source` argument
   `MY_GRIDSQUARE` gets the most common one in the file.
 - **A local raw QSO `.csv` file** -- e.g. `logs/sample_qso_log.csv`, shaped
   like a Google Sheets export: columns `date, band, sourcegrid, time, call,
-  grid`. It's normal for `date`, `band`, and `sourcegrid` to be blank on a
+  grid` (in any order; common alternatives such as `my_grid`, `callsign` and
+  `gridsquare` work too). It's normal for `date`, `band`, and `sourcegrid` to be blank on a
   row when they haven't changed since the previous QSO -- every script
   forward-fills those automatically.
 - **A Google Sheets share URL** -- fetched live and forward-filled the same

@@ -15,7 +15,8 @@ path to a file in here as its command-line argument.
   logger.
 - **Raw QSO `.csv` files** -- an export of your working log (e.g. from
   Google Sheets: File > Download > Comma Separated Values), with columns
-  `date, band, sourcegrid, time, call, grid`. Only `arrl_10ghz_cabrillo.py`
+  `date, band, sourcegrid, time, call, grid` (any order; `my_grid`,
+  `home_grid`, `callsign`, `gridsquare` and similar names work too). Only `arrl_10ghz_cabrillo.py`
   consumes this directly (to build a Cabrillo file); the analysis scripts
   will also read one if you point them at it.
 
