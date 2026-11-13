@@ -84,3 +84,14 @@ def test_a_sheet_export_with_a_partial_title_row_still_loads(tmp_path):
                     ",,,,,\n" + ROWS)
     df = load_local_raw_csv(str(path))
     assert list(df["call"]) == ["VE2ZAZ", "VE3FN", "W2FU"]
+
+
+def test_a_single_row_is_checked_too(tmp_path):
+    # One QSO under a header missing a column: an error naming the column.
+    path = tmp_path / "one.csv"
+    path.write_text("date,band,where_i_was,time,call,grid\n" + ROWS.split("\n")[0] + "\n")
+    with pytest.raises(CsvHeaderError, match="sourcegrid"):
+        load_local_raw_csv(str(path))
+    # One non-QSO row under a title row: the legacy layout (no QSOs), not an error.
+    path.write_text("Date,Band,My QTH,UTC,Call,Grid\n(yyyy-mm-dd),(GHz),,,(their call),(their grid)\n")
+    assert len(load_local_raw_csv(str(path))) == 0
